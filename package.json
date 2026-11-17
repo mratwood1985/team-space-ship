@@ -1,6 +1,6 @@
 {
   "name": "team-space-ship",
-  "version": "2.0.0",
+  "version": "3.0.0",
   "description": "Co-op multiplayer browser space ship game: six stations, bots fill empty seats",
   "main": "server.js",
   "private": true,
@@ -8,8 +8,14 @@
     "start": "node server.js",
     "test": "node test/ws-test.js"
   },
-  "engines": { "node": ">=18" },
-  "dependencies": { "ws": "^8.18.0" },
-  "devDependencies": { "puppeteer-core": "^23.0.0" },
+  "engines": {
+    "node": ">=18"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "puppeteer-core": "^23.0.0"
+  },
   "license": "UNLICENSED"
 }

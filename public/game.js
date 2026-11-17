@@ -6,11 +6,11 @@ const { sin, cos, atan2, hypot, min, max, abs, PI, random, floor, round, sqrt } 
 const TAU = PI * 2, clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const wrap = a => { while (a > PI) a -= TAU; while (a < -PI) a += TAU; return a; };
 const lerp = (a, b, t) => a + (b - a) * t, lerpA = (a, b, t) => a + wrap(b - a) * t;
-const D = window.DEFS, { ROLES, RNAME, RSHORT, PORT_NAMES, TREE_OF, TREES, ABIL, NODE_COST, infCost, ETYPES, DIFFS, MTYPES, MK_COST, MK_NAMES } = D;
+const D = window.DEFS, { ROLES, RNAME, RSHORT, PORT_NAMES, TREE_OF, TREES, ABIL, NODE_COST, infCost, infCap, ETYPES, DIFFS, MTYPES, MK_COST, MK_NAMES, PORT_COST, portUpCost, PORT_MAX_LV, CORE_RATE, pyrAllowed, SHIELD_ARC_MAX } = D;
 const PILOT = 0, GUNR = 1, REPAIR = 2, ENG = 3, SHIELD = 4, GUNL = 5;
 const RICON = ['✈', '⟫', '✚', '⚙', '◐', '⟪'];
 const PLAYER_RED = '#ff3030', ENEMY_GREEN = '#39ff4a';
-const MODE_N = ['DEFLECT', 'KINETIC'], MODE_C = ['#5fe0ff', '#ffaa33'];
+const SHIELD_BLUE = '#4aa8ff';
 const isTouch = matchMedia('(pointer:coarse)').matches || 'ontouchstart' in window;
 if (isTouch) document.body.classList.add('touch');
 const ROLE_HELP = [
@@ -18,9 +18,9 @@ const ROLE_HELP = [
   'Aim + hold click to fire your starboard (right) turret. Your red bolts shoot down missiles and flak. If the port turret is destroyed you get a full 360° arc.',
   'Hold FIRE while the needle is inside the green band to repair the port named in your panel (~10 s). Pick a target with 1-6 (0 = hull) or tap it. When every port is at full health your drone launches automatically and follows your cursor.',
   'You alone control speed: W/S or wheel = throttle. 1/2/3 route a power pip to Engines/Weapons/Shields (4 = balanced). Engines destroyed = the ship slowly stalls until repaired.',
-  'Aim to swing the deflector. Space / right-click flips mode: DEFLECT blocks green lasers, KINETIC blocks missiles and flak. Blocked shots feed ship energy.',
+  'Aim to place the blue shield arc: it stays where you point it even when the ship turns. It blocks ALL enemy fire until its HP is gone, then it needs 20 s to recharge. Buy HP and arc width (starts 15°, max 90°) in the upgrades; the Lance abilities fire the shield as a weapon.',
   'Aim + hold click to fire your port (left) turret. Your red bolts shoot down missiles and flak. If the starboard turret is destroyed you get a full 360° arc.'];
-const COMMON = 'Your station destroyed? <b>Hold FIRE to self-patch</b>. <b>F</b> = lend a hand to repairs. <b>Q/E/R</b> = your abilities (buy them in the skill tree, U). <b>Tab</b> switch role · <b>H</b> help.';
+const COMMON = 'Your station destroyed? <b>Hold FIRE to self-patch</b>. <b>F</b> = lend a hand to repairs. <b>Q/E/R</b> = your abilities (pick them in the skill pyramid, U). <b>Tab</b> switch role · <b>H</b> help.';
 
 // ---------- state ----------
 let ws = null, me = { role: -1, cr: 0, tr: null, code: '', pid: 0 }, snaps = [], offset = null, lastSnap = null, cur = null;
@@ -142,26 +142,88 @@ function metal(g, r, c1 = '#c9ced6', c2 = '#6d737d') { const gr = g.createLinear
 function greeble(g, R, n, x0, x1, y0, y1, dark = 'rgba(0,0,0,.28)', light = 'rgba(255,255,255,.18)') { for (let i = 0; i < n; i++) { const x = x0 + R() * (x1 - x0), y = y0 + R() * (y1 - y0), w = 1 + R() * 5, h = 1 + R() * 3; g.fillStyle = R() < 0.6 ? dark : light; g.fillRect(x, y, w, h); } }
 function panelLines(g, R, n, x0, x1, y0, y1) { g.strokeStyle = 'rgba(20,24,30,.45)'; g.lineWidth = 0.6; for (let i = 0; i < n; i++) { g.beginPath(); if (R() < 0.5) { const x = x0 + R() * (x1 - x0); g.moveTo(x, y0 + R() * (y1 - y0) * 0.5); g.lineTo(x, y1 - R() * (y1 - y0) * 0.5); } else { const y = y0 + R() * (y1 - y0); g.moveTo(x0 + R() * (x1 - x0) * 0.5, y); g.lineTo(x1 - R() * (x1 - x0) * 0.5, y); } g.stroke(); } }
 function shipBody(g, R, pts, r, c1, c2) { poly(g, pts); g.fillStyle = metal(g, r, c1, c2); g.fill(); g.save(); g.clip(); let x0 = 1e9, x1 = -1e9, y0 = 1e9, y1 = -1e9; for (const [x, y] of pts) { x0 = min(x0, x); x1 = max(x1, x); y0 = min(y0, y); y1 = max(y1, y); } panelLines(g, R, 26, x0, x1, y0, y1); greeble(g, R, 50, x0, x1, y0, y1); const sh = g.createLinearGradient(0, y0, 0, y1); sh.addColorStop(0, 'rgba(255,255,255,.12)'); sh.addColorStop(1, 'rgba(0,0,0,.35)'); g.fillStyle = sh; g.fillRect(x0, y0, x1 - x0, y1 - y0); g.restore(); g.strokeStyle = 'rgba(10,12,16,.9)'; g.lineWidth = 1.2; poly(g, pts); g.stroke(); }
-// player corvette, one look per ship Mk
+// player ship: a distinct hull per Mk. Local coords: nose = +x, starboard = +y. The geometry (D.GEO) matches the server hit boxes.
+const GEO = D.GEO, secIdx = D.secIdx;
+const TIER = [
+  { c1: '#d9dde3', c2: '#747a85', acc: '#d02a2a', lite: '#ff8a8a' },
+  { c1: '#c0c6cf', c2: '#4a5260', acc: '#ffa21a', lite: '#ffd38a' },
+  { c1: '#9aa3b8', c2: '#262c3c', acc: '#37d6ff', lite: '#bff4ff' },
+];
+const ENGN = [[[-46, -9], [-46, 0], [-46, 9]], [[-84, -13], [-84, 13], [-80, 0]], [[-112, -18], [-112, -7], [-112, 7], [-112, 18]]];
+function socket(g, x, y, r = 6) { g.fillStyle = '#12151a'; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); g.strokeStyle = '#6f7682'; g.lineWidth = 1.2; g.stroke(); g.strokeStyle = 'rgba(255,255,255,.12)'; g.beginPath(); g.arc(x, y, r - 2, 0, TAU); g.stroke(); }
+function stationArt(g, mk, tc) {
+  const G = GEO[mk];
+  // cockpit canopy
+  const [cx0, cy0] = G.st[0]; const cg = g.createLinearGradient(cx0 - 8, cy0 - 5, cx0 + 8, cy0 + 5); cg.addColorStop(0, '#bff'); cg.addColorStop(0.5, '#3a8fb0'); cg.addColorStop(1, '#0a2a44'); g.fillStyle = cg; g.beginPath(); g.ellipse(cx0, cy0, 8 + mk * 2, 4.5 + mk, 0, 0, TAU); g.fill(); g.strokeStyle = '#111'; g.lineWidth = 1; g.stroke();
+  // engine bay
+  const [ex, ey] = G.st[3]; g.fillStyle = '#20242b'; g.fillRect(ex - 6, ey - 8 - mk * 3, 14 + mk * 2, 16 + mk * 6); g.fillStyle = tc.acc; g.fillRect(ex - 6, ey - 1, 14 + mk * 2, 2);
+  // deflector dish (blue)
+  const [sx, sy] = G.st[4]; g.fillStyle = '#26323f'; g.beginPath(); g.arc(sx, sy, 7, 0, TAU); g.fill(); g.fillStyle = '#3aa8ff'; g.beginPath(); g.arc(sx, sy, 4, 0, TAU); g.fill(); g.strokeStyle = '#bfe4ff'; g.lineWidth = 0.8; g.stroke();
+  // repair bay hatch
+  const [rx, ry] = G.st[2]; g.fillStyle = '#26352b'; g.fillRect(rx - 7, ry - 6, 14, 12); g.fillStyle = '#4cff7a'; g.fillRect(rx - 1, ry - 4, 2, 8); g.fillRect(rx - 4, ry - 1, 8, 2); g.strokeStyle = '#111'; g.lineWidth = 1; g.strokeRect(rx - 7, ry - 6, 14, 12);
+  // turret rings (guns are drawn live on top)
+  for (const i of [1, 5]) socket(g, G.st[i][0], G.st[i][1], 8 + mk);
+}
 function playerSprite(mk) {
-  return spr('pl' + mk, 150, 130, (g, R) => {
-    const L = mk === 2 ? 1.12 : 1;
-    if (mk >= 1) { // weapon pods / wings
-      for (const s of [-1, 1]) { const wp = [[18, 22 * s], [-8, 46 * s], [-30, 48 * s], [-26, 24 * s]]; shipBody(g, R, wp, 40, '#b9bec6', '#5c626b'); g.fillStyle = '#c33'; g.fillRect(-22, 40 * s - 2, 14, 4); }
+  const tc = TIER[mk], dims = [[130, 92], [196, 136], [256, 156]][mk];
+  return spr('pl' + mk, dims[0], dims[1], (g, R) => {
+    const G = GEO[mk];
+    if (mk === 0) { // Mk I Corvette: sleek red-striped wedge
+      for (const s of [-1, 1]) shipBody(g, R, [[18, 9 * s], [-12, 32 * s], [-36, 34 * s], [-32, 14 * s]], 40, tc.c1, tc.c2);
+      shipBody(g, R, mirror([[54, 0], [42, -5], [26, -9], [8, -13], [-22, -17], [-38, -15], [-47, -8]]), 40, tc.c1, tc.c2);
+      g.fillStyle = tc.acc; for (const s of [-1, 1]) { g.fillRect(-34, 22 * s - 2, 22, 3); g.fillRect(8, 11 * s - 1.5, 16, 3); }
+    } else if (mk === 1) { // Mk II Gunship: wide wings with weapon pods, twin nacelles, canards
+      for (const s of [-1, 1]) {
+        shipBody(g, R, [[62, 8 * s], [44, 26 * s], [32, 24 * s], [44, 8 * s]], 30, tc.c1, tc.c2);
+        shipBody(g, R, [[26, 14 * s], [-6, 52 * s], [-48, 56 * s], [-58, 42 * s], [-40, 18 * s]], 70, tc.c1, tc.c2);
+        shipBody(g, R, [[-60, 8 * s], [-70, 18 * s], [-90, 18 * s], [-92, 8 * s]], 20, '#7c828d', '#2c3037');
+        g.fillStyle = tc.acc; g.fillRect(-46, 48 * s - 2, 30, 3);
+      }
+      shipBody(g, R, mirror([[74, 0], [58, -6], [36, -10], [10, -16], [-30, -20], [-60, -22], [-78, -14], [-82, -6]]), 70, tc.c1, tc.c2);
+      shipBody(g, R, mirror([[44, 0], [20, -7], [-28, -11], [-44, -6]]), 50, '#e2e5ea', '#808793');
+      g.fillStyle = tc.acc; g.fillRect(-20, -1.5, 32, 3);
+    } else { // Mk III Battlecruiser: armored sponsons, command tower, quad engines
+      for (const s of [-1, 1]) {
+        shipBody(g, R, [[60, 22 * s], [52, 50 * s], [20, 62 * s], [-24, 64 * s], [-70, 58 * s], [-82, 36 * s], [-60, 26 * s]], 90, tc.c1, tc.c2);
+        shipBody(g, R, [[34, 54 * s], [12, 66 * s], [-20, 68 * s], [-26, 58 * s]], 30, '#59627a', '#1c2130');
+        g.strokeStyle = tc.acc; g.lineWidth = 1.6; g.beginPath(); g.moveTo(52, 50 * s); g.lineTo(20, 62 * s); g.lineTo(-24, 64 * s); g.lineTo(-70, 58 * s); g.stroke();
+        g.fillStyle = tc.lite; for (let k = 0; k < 6; k++) g.fillRect(30 - k * 18, 60 * s - 1, 5, 2);
+      }
+      shipBody(g, R, mirror([[94, 0], [82, -6], [58, -12], [30, -20], [-10, -24], [-60, -26], [-100, -26], [-110, -20], [-113, 0]]), 110, tc.c1, tc.c2);
+      shipBody(g, R, mirror([[60, 0], [30, -9], [-40, -14], [-90, -18], [-96, 0]]), 80, '#b8c0d0', '#454d62');
+      shipBody(g, R, mirror([[26, 0], [12, -9], [-12, -9], [-22, 0]]), 30, '#d8dee8', '#68728a'); // command tower
+      g.fillStyle = tc.acc; g.fillRect(-4, -2, 14, 4); g.fillStyle = '#d8b35a'; g.fillRect(-100, -22, 3, 44);
+      for (const y of [-18, -7, 7, 18]) { g.fillStyle = '#0e1116'; g.beginPath(); g.arc(-111, y, 6, 0, TAU); g.fill(); g.fillStyle = tc.acc; g.beginPath(); g.arc(-111, y, 2.4, 0, TAU); g.fill(); }
     }
-    const body = mirror([[52 * L, 0], [40 * L, -7], [24, -12], [4, -15], [-20, -24], [-40, -26], [-48, -18]]);
-    shipBody(g, R, body, 40, '#d5d9df', '#727882');
-    if (mk === 2) { const top = mirror([[30, 0], [12, -8], [-30, -12], [-38, -6]]); shipBody(g, R, top, 30, '#e3e6ea', '#8a9099'); }
-    // red rebel stripes
-    g.fillStyle = '#c42525'; g.fillRect(-36, -25, 10, 4); g.fillRect(-36, 21, 10, 4); g.fillRect(10, -14, 12, 3); g.fillRect(10, 11, 12, 3);
-    // engine block
-    g.fillStyle = '#2b2f36'; g.fillRect(-52, -20, 8, 40); for (const y of [-13, 0, 13]) { g.fillStyle = '#111'; g.beginPath(); g.arc(-50, y, 5, 0, TAU); g.fill(); }
-    // cockpit glass
-    const cg = g.createLinearGradient(30, -6, 40, 6); cg.addColorStop(0, '#9ff'); cg.addColorStop(1, '#136'); g.fillStyle = cg; g.beginPath(); g.ellipse(36 * L, 0, 8, 5, 0, 0, TAU); g.fill(); g.strokeStyle = '#222'; g.stroke();
-    g.fillStyle = '#9aa'; g.beginPath(); g.arc(-8, 0, 7, 0, TAU); g.fill(); g.strokeStyle = '#333'; g.stroke(); // dorsal sensor dish
-    g.strokeStyle = '#555'; g.beginPath(); g.moveTo(-8, 0); g.lineTo(-2, -4); g.stroke();
+    if (mk === 0) { g.fillStyle = '#2b2f36'; g.fillRect(-52, -14, 8, 28); for (const [x, y] of ENGN[0]) { g.fillStyle = '#0e1116'; g.beginPath(); g.arc(x - 3, y, 4.5, 0, TAU); g.fill(); } }
+    if (mk === 1) { for (const [x, y] of ENGN[1]) { g.fillStyle = '#0e1116'; g.beginPath(); g.arc(x - 4, y, 5.5, 0, TAU); g.fill(); g.fillStyle = tc.acc; g.beginPath(); g.arc(x - 4, y, 2, 0, TAU); g.fill(); } }
+    stationArt(g, mk, tc);
+    for (const row of G.po) for (const p of row) socket(g, p[0], p[1], 6); // empty hard-points: room for the extra ports
   });
 }
+// extra-port hardware, drawn live at its mount (local coords). ang = barrel angle relative to the ship
+function drawPortIcon(id, x, y, ang, lv, T) {
+  cx.save(); cx.translate(x, y); cx.lineJoin = 'round';
+  const base = () => { cx.fillStyle = '#4a505a'; cx.beginPath(); cx.arc(0, 0, 6.5, 0, TAU); cx.fill(); cx.strokeStyle = '#151820'; cx.lineWidth = 1; cx.stroke(); };
+  base(); cx.rotate(ang);
+  const barrel = (ox, len, w, col) => { cx.fillStyle = col || '#2a2d33'; cx.fillRect(2, ox - w / 2, len, w); cx.fillStyle = '#ff4a3a'; cx.fillRect(2 + len - 2, ox - w / 2, 2, w); };
+  if (id === 'twin') { barrel(-3, 14, 2.4); barrel(3, 14, 2.4); }
+  else if (id === 'rockets') { cx.fillStyle = '#8c929c'; cx.fillRect(-2, -6, 14, 12); cx.strokeStyle = '#222'; cx.strokeRect(-2, -6, 14, 12); for (const o of [-3.5, 0, 3.5]) { cx.fillStyle = '#1a1c20'; cx.beginPath(); cx.arc(12, o, 1.8, 0, TAU); cx.fill(); cx.fillStyle = '#ff3a2a'; cx.beginPath(); cx.arc(12, o, 0.9, 0, TAU); cx.fill(); } }
+  else if (id === 'scatter') { for (let k = -2; k <= 2; k++) { cx.save(); cx.rotate(k * 0.22); barrel(0, 11, 1.8); cx.restore(); } }
+  else if (id === 'beam') { cx.fillStyle = '#20242b'; cx.fillRect(0, -3, 11, 6); cx.strokeStyle = '#ff5a4a'; cx.lineWidth = 1.5; cx.beginPath(); cx.arc(11, 0, 3 + sin(T * 8) * 0.6, 0, TAU); cx.stroke(); cx.fillStyle = '#ff9a8a'; cx.beginPath(); cx.arc(11, 0, 1.4, 0, TAU); cx.fill(); }
+  else if (id === 'mines') { cx.rotate(-ang); cx.fillStyle = '#2c3036'; cx.fillRect(-5, -5, 10, 10); cx.fillStyle = (T * 2 | 0) % 2 ? '#f33' : '#600'; cx.beginPath(); cx.arc(0, 0, 2, 0, TAU); cx.fill(); }
+  else if (id === 'tractor') { cx.rotate(-ang); cx.strokeStyle = '#6df'; cx.lineWidth = 1.2; for (const r of [3, 5, 7]) { cx.globalAlpha = 0.9 - (r - 3) * 0.12; cx.beginPath(); cx.arc(0, 0, r, 0, TAU); cx.stroke(); } cx.globalAlpha = 1; }
+  else if (id === 'aux') { cx.rotate(-ang); cx.fillStyle = '#2a2f38'; cx.fillRect(-5, -6, 10, 12); const gl = 0.6 + sin(T * 5) * 0.25; cx.fillStyle = `rgba(255,220,90,${gl})`; cx.fillRect(-3, -4, 6, 8); }
+  else if (id === 'rear') { cx.rotate(-ang + PI); cx.fillStyle = '#26323f'; cx.beginPath(); cx.moveTo(-4, -6); cx.lineTo(6, 0); cx.lineTo(-4, 6); cx.closePath(); cx.fill(); cx.fillStyle = '#3aa8ff'; cx.beginPath(); cx.arc(1, 0, 2.2, 0, TAU); cx.fill(); }
+  else if (id === 'reflect') { cx.rotate(-ang); cx.strokeStyle = '#8fd8ff'; cx.lineWidth = 1; for (let k = 0; k < 6; k++) { const a = k * PI / 3; cx.beginPath(); cx.moveTo(cos(a) * 5, sin(a) * 5); cx.lineTo(cos(a + PI / 3) * 5, sin(a + PI / 3) * 5); cx.stroke(); } cx.fillStyle = 'rgba(100,200,255,.4)'; cx.beginPath(); cx.arc(0, 0, 3, 0, TAU); cx.fill(); }
+  else if (id === 'capbank') { cx.rotate(-ang); for (let k = -1; k <= 1; k++) { cx.fillStyle = '#2f3a52'; cx.fillRect(-6 + k * 4.5, -5, 3.6, 10); cx.fillStyle = '#4ac0ff'; cx.fillRect(-5.6 + k * 4.5, -3 + (k + 1) % 2, 2.8, 4); } }
+  else if (id === 'drone2') { cx.rotate(-ang); cx.fillStyle = '#26303a'; cx.fillRect(-6, -5, 12, 10); cx.fillStyle = '#c08cff'; cx.fillRect(-2.5, -2.5, 5, 5); }
+  else if (id === 'sdrone') { cx.rotate(-ang); cx.strokeStyle = '#9cf'; cx.lineWidth = 1.5; cx.beginPath(); cx.arc(0, 0, 5, 0, TAU); cx.stroke(); cx.fillStyle = '#c08cff'; cx.beginPath(); cx.arc(cos(T * 3) * 5, sin(T * 3) * 5, 1.8, 0, TAU); cx.fill(); }
+  else if (id === 'welder') { cx.rotate(-ang); cx.strokeStyle = '#aab'; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(-4, 4); cx.lineTo(0, -2); cx.lineTo(5, 0); cx.stroke(); if ((T * 9 | 0) % 3 === 0) { cx.fillStyle = '#fff'; cx.beginPath(); cx.arc(5, 0, 1.6, 0, TAU); cx.fill(); } }
+  cx.rotate(-ang); cx.fillStyle = '#ffd54a'; for (let k = 0; k < min(5, (lv / 2) | 0); k++) cx.fillRect(-6 + k * 3, 8, 2, 2); // level pips
+  cx.restore();
+}
+
 const ESPR = {
   probe: g => { g.strokeStyle = '#555'; g.lineWidth = 1.2; for (let i = 0; i < 5; i++) { const a = PI * 0.6 + i * 0.2; g.beginPath(); g.moveTo(0, 0); g.lineTo(cos(a + PI) * -16, sin(a) * 14); g.stroke(); } const gr = g.createRadialGradient(-3, -3, 1, 0, 0, 10); gr.addColorStop(0, '#777'); gr.addColorStop(1, '#1b1d22'); g.fillStyle = gr; g.beginPath(); g.arc(0, 0, 10, 0, TAU); g.fill(); g.fillStyle = '#f33'; g.beginPath(); g.arc(7, 0, 2.2, 0, TAU); g.fill(); },
   fighter: (g, R) => { for (const s of [-1, 1]) { const w = mirror([[14, 15 * s], [9, 17 * s]]).map(([x, y]) => [x, y]); poly(g, [[-14, 13 * s], [-9, 18 * s], [9, 18 * s], [14, 13 * s], [9, 16 * s], [-9, 16 * s]]); g.fillStyle = '#5b6068'; g.fill(); g.strokeStyle = '#1a1c20'; g.stroke(); g.fillStyle = '#2a2d33'; g.fillRect(-12, 13.5 * s - (s > 0 ? 0 : 2), 24, 2); g.strokeStyle = '#777'; g.lineWidth = 2; g.beginPath(); g.moveTo(0, 0); g.lineTo(0, 14 * s); g.stroke(); g.lineWidth = 1; } const gr = g.createRadialGradient(-2, -2, 1, 0, 0, 7); gr.addColorStop(0, '#bfc4cc'); gr.addColorStop(1, '#3a3e45'); g.fillStyle = gr; g.beginPath(); g.arc(0, 0, 7, 0, TAU); g.fill(); g.fillStyle = '#111'; g.beginPath(); g.arc(3, 0, 3.4, 0, TAU); g.fill(); g.strokeStyle = '#666'; for (let i = 0; i < 8; i++) { g.beginPath(); g.moveTo(3, 0); g.lineTo(3 + cos(i * PI / 4) * 3.4, sin(i * PI / 4) * 3.4); g.stroke(); } },
@@ -182,26 +244,108 @@ const ASPR = {
   fs: () => spr('afs', 200, 200, (g, R) => { g.strokeStyle = '#99a3ad'; g.lineWidth = 14; g.beginPath(); g.arc(0, 0, 80, 0, TAU); g.stroke(); g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = 2; g.beginPath(); g.arc(0, 0, 80, 0, TAU); g.stroke(); for (let i = 0; i < 4; i++) { g.save(); g.rotate(i * PI / 2); g.fillStyle = '#7d868f'; g.fillRect(16, -4, 60, 8); g.restore(); } const gr = g.createRadialGradient(-6, -6, 2, 0, 0, 22); gr.addColorStop(0, '#e6eaee'); gr.addColorStop(1, '#5b636b'); g.fillStyle = gr; g.beginPath(); g.arc(0, 0, 22, 0, TAU); g.fill(); g.fillStyle = '#5cf'; for (let i = 0; i < 16; i++) { const a = i / 16 * TAU; g.fillRect(cos(a) * 80 - 1.5, sin(a) * 80 - 1.5, 3, 3); } }),
   pod: () => spr('apod', 40, 30, (g, R) => { shipBody(g, R, mirror([[14, 0], [10, -7], [-12, -8], [-14, -4]]), 14, '#e8e2d0', '#857a60'); g.fillStyle = '#6cf'; g.fillRect(4, -3, 6, 6); }),
 };
-// ---------- planets ----------
-const PAL = { rocky: ['#9b7b5d', '#5b4636', '#c9a77f'], ice: ['#cfe8f5', '#7ea8c4', '#ffffff'], lava: ['#4a1d10', '#ff5a1a', '#ffb347'], ocean: ['#1d5fa8', '#0f3566', '#4fbf6a'], gas: ['#d9a86a', '#a2643a', '#f2dcb0'], desert: ['#e0b878', '#a7743d', '#f6dca4'], toxic: ['#7fae3a', '#3d5e1d', '#c8f06a'] };
-const ATM = { rocky: '#ffc89a', ice: '#bfeaff', lava: '#ff7a3a', ocean: '#7fc8ff', gas: '#ffd9a0', desert: '#ffe0a8', toxic: '#c8ff7a' };
-function planetCanvas(pl, size) {
-  const key = 'pl_' + pl.seed + '_' + size; if (SPR[key]) return SPR[key];
-  const c = SPR[key] = document.createElement('canvas'); c.width = c.height = size; const g = c.getContext('2d'), R = rng(pl.seed), r = size * 0.38, C = size / 2, p = PAL[pl.kind] || PAL.rocky;
-  const at = g.createRadialGradient(C, C, r * 0.95, C, C, r * 1.25); at.addColorStop(0, ATM[pl.kind] + '66'); at.addColorStop(1, ATM[pl.kind] + '00'); g.fillStyle = at; g.fillRect(0, 0, size, size);
-  g.save(); g.beginPath(); g.arc(C, C, r, 0, TAU); g.clip(); g.fillStyle = p[0]; g.fillRect(0, 0, size, size);
-  if (pl.kind === 'gas') { for (let i = 0; i < 18; i++) { g.fillStyle = (R() < 0.5 ? p[1] : p[2]) + '88'; const y = C - r + R() * 2 * r, h = 4 + R() * r * 0.18; g.fillRect(0, y, size, h); } g.fillStyle = p[1] + 'cc'; g.beginPath(); g.ellipse(C + r * 0.3, C + r * 0.25, r * 0.16, r * 0.09, 0, 0, TAU); g.fill(); }
-  else { for (let i = 0; i < 90; i++) { const x = C + (R() - .5) * 2 * r, y = C + (R() - .5) * 2 * r, rr = 3 + R() * r * 0.28; g.fillStyle = (R() < 0.5 ? p[1] : p[2]) + (R() < 0.5 ? '66' : '44'); g.beginPath(); g.ellipse(x, y, rr * (1 + R()), rr, R() * PI, 0, TAU); g.fill(); }
-    if (pl.kind === 'ocean' || pl.kind === 'ice') for (let i = 0; i < 30; i++) { g.fillStyle = 'rgba(255,255,255,.18)'; g.beginPath(); g.ellipse(C + (R() - .5) * 2 * r, C + (R() - .5) * 2 * r, 10 + R() * r * 0.3, 3 + R() * 6, R() * 0.4, 0, TAU); g.fill(); }
-    if (pl.kind === 'lava') for (let i = 0; i < 40; i++) { g.strokeStyle = 'rgba(255,170,60,.5)'; g.lineWidth = 1 + R() * 2; g.beginPath(); let x = C + (R() - .5) * 2 * r, y = C + (R() - .5) * 2 * r; g.moveTo(x, y); for (let k = 0; k < 4; k++) { x += (R() - .5) * 30; y += (R() - .5) * 30; g.lineTo(x, y); } g.stroke(); } }
-  const sh = g.createRadialGradient(C - r * 0.45, C - r * 0.45, r * 0.1, C, C, r * 1.05); sh.addColorStop(0, 'rgba(255,255,255,.18)'); sh.addColorStop(0.55, 'rgba(0,0,0,0)'); sh.addColorStop(1, 'rgba(0,0,0,.82)'); g.fillStyle = sh; g.fillRect(0, 0, size, size); g.restore();
-  if (pl.kind === 'gas' || R() < 0.2) { g.strokeStyle = 'rgba(230,210,170,.45)'; g.lineWidth = size * 0.02; g.beginPath(); g.ellipse(C, C, r * 1.6, r * 0.32, -0.3, 0, TAU); g.stroke(); }
+// v3 enemy art
+Object.assign(ESPR, {
+  warden: (g, R) => { shipBody(g, R, mirror([[18, 0], [8, -7], [-8, -9], [-16, -4], [-16, 0]]), 18, '#aab0c2', '#444a60'); g.strokeStyle = '#c9a0ff'; g.lineWidth = 2; g.beginPath(); g.arc(14, 0, 9, -1.2, 1.2); g.stroke(); g.fillStyle = '#d9b8ff'; g.beginPath(); g.arc(14, 0, 2.5, 0, TAU); g.fill(); for (const s of [-1, 1]) { g.fillStyle = '#2a2d33'; g.fillRect(2, 8 * s - 1, 12, 2); g.fillStyle = '#6f6'; g.fillRect(14, 8 * s - 1, 2, 2); } g.fillStyle = '#9fe'; g.fillRect(6, -2, 4, 4); },
+  lancer: (g, R) => { shipBody(g, R, mirror([[26, 0], [14, -5], [-10, -8], [-24, -6], [-26, 0]]), 24, '#9aa2b0', '#3c424e'); g.fillStyle = '#20242b'; g.fillRect(8, -2.5, 24, 5); g.strokeStyle = '#39ff4a'; g.lineWidth = 1.5; for (const x of [12, 18, 24]) { g.beginPath(); g.arc(x, 0, 3.4, 0, TAU); g.stroke(); } for (const s of [-1, 1]) { poly(g, [[-6, 6 * s], [-16, 16 * s], [-24, 14 * s], [-18, 6 * s]]); g.fillStyle = '#4c525e'; g.fill(); g.strokeStyle = '#15171a'; g.stroke(); } g.fillStyle = '#ffcf6a'; g.fillRect(-27, -3, 2, 6); },
+  swarm: g => { g.strokeStyle = '#555'; g.lineWidth = 1.2; for (const a of [-0.9, 0, 0.9]) { g.beginPath(); g.moveTo(0, 0); g.lineTo(-9, a * 9); g.stroke(); } poly(g, [[9, 0], [-4, -5], [-4, 5]]); const gr = g.createLinearGradient(-4, 0, 9, 0); gr.addColorStop(0, '#333'); gr.addColorStop(1, '#8a9099'); g.fillStyle = gr; g.fill(); g.strokeStyle = '#111'; g.stroke(); g.fillStyle = '#f33'; g.beginPath(); g.arc(4, 0, 1.4, 0, TAU); g.fill(); },
+  corvette: (g, R) => { shipBody(g, R, mirror([[58, 0], [48, -9], [24, -17], [-20, -20], [-46, -16], [-58, -8], [-58, 0]]), 56, '#b6bfd0', '#46506a'); shipBody(g, R, mirror([[30, 0], [14, -8], [-30, -11], [-40, -6]]), 30, '#cfd6e3', '#6b768e'); g.fillStyle = '#26324a'; g.fillRect(-10, -5, 28, 10); for (const x of [-16, 0, 16]) for (const s of [-1, 1]) { g.fillStyle = '#7d89a8'; g.fillRect(x - 3, 17 * s - (s > 0 ? 0 : 2), 6, 2); } g.fillStyle = '#9fe'; g.fillRect(40, -2.5, 8, 5); g.fillStyle = '#6f6'; for (const y of [-10, -3, 3, 10]) g.fillRect(-60, y - 1.5, 3, 3); },
+  mcruiser: (g, R) => { shipBody(g, R, mirror([[66, 0], [54, -10], [30, -20], [-30, -24], [-58, -18], [-68, -8], [-68, 0]]), 64, '#c2b9a8', '#5c5040'); for (const s of [-1, 1]) { shipBody(g, R, [[46, 10 * s], [38, 26 * s], [4, 28 * s], [8, 12 * s]], 24, '#8a8f6a', '#3a3d28'); g.fillStyle = '#1a1c14'; for (let k = 0; k < 4; k++) g.fillRect(8 + k * 8, 26 * s - 2, 5, 4); g.fillStyle = '#6f6'; for (let k = 0; k < 4; k++) g.fillRect(8 + k * 8, 26 * s - 1, 5, 2); } g.fillStyle = '#2d281e'; g.fillRect(-60, -6, 8, 12); g.fillStyle = '#9fe'; g.fillRect(50, -2.5, 8, 5); g.fillStyle = '#f93'; g.fillRect(-70, -4, 3, 8); },
+  carrier: (g, R) => { shipBody(g, R, mirror([[124, 0], [112, -10], [74, -26], [20, -42], [-70, -46], [-112, -38], [-124, -20], [-124, 0]]), 130, '#c6ccd6', '#4d5666'); g.fillStyle = '#2a303b'; g.fillRect(-100, -30, 150, 60); g.strokeStyle = 'rgba(255,255,255,.25)'; g.lineWidth = 1; for (let x = -96; x < 48; x += 14) { g.beginPath(); g.moveTo(x, -30); g.lineTo(x, 30); g.stroke(); } g.fillStyle = '#ffd24a'; for (let x = -92; x < 46; x += 14) { g.fillRect(x, -29, 6, 2); g.fillRect(x, 27, 6, 2); } shipBody(g, R, mirror([[90, 0], [70, -8], [40, -12], [40, 0]]), 40, '#dde2ea', '#7a8498'); g.fillStyle = '#9fe'; g.fillRect(100, -3, 10, 6); g.fillStyle = '#7bff9a'; for (const y of [-14, -5, 5, 14]) g.fillRect(-127, y - 2, 4, 4); },
+  dreadnought: (g, R) => { const tri = [[200, 0], [-150, -110], [-150, 110]]; shipBody(g, R, tri, 200, '#cfd5df', '#4a5262'); shipBody(g, R, mirror([[150, 0], [60, -14], [-90, -52], [-136, -52], [-136, 0]]), 160, '#dfe3ea', '#6d778c'); shipBody(g, R, mirror([[70, 0], [30, -10], [-96, -30], [-126, -30], [-126, 0]]), 110, '#e8ecf2', '#8791a6'); g.strokeStyle = 'rgba(25,30,40,.6)'; g.lineWidth = 2; g.beginPath(); g.moveTo(200, 0); g.lineTo(-150, 0); g.stroke(); shipBody(g, R, mirror([[-60, 0], [-70, -22], [-118, -26], [-124, 0]]), 50, '#f0f2f5', '#9aa4b8'); g.fillStyle = '#a6e0ff'; g.beginPath(); g.arc(-96, -16, 5, 0, TAU); g.arc(-96, 16, 5, 0, TAU); g.fill(); g.fillStyle = '#39ff4a'; g.globalAlpha = 0.75; g.fillRect(150, -2, 44, 4); g.globalAlpha = 1; for (const y of [-80, -52, -26, 0, 26, 52, 80]) { g.fillStyle = '#8f8'; g.fillRect(-153, y - 4, 4, 8); } },
+});
+Object.assign(ESIZE, { warden: [48, 40], lancer: [64, 44], swarm: [28, 24], corvette: [150, 60], mcruiser: [160, 74], carrier: [280, 120], dreadnought: [450, 290] });
+// enemy shield bubble (violet: neither the player's blue nor the enemy green)
+function enemyShield(x, y, r, f, T) {
+  cx.save(); cx.translate(x, y); const pulse = 0.5 + sin(T * 4 + x) * 0.15;
+  const gr = cx.createRadialGradient(0, 0, r * 0.7, 0, 0, r * 1.05); gr.addColorStop(0, 'rgba(180,120,255,0)'); gr.addColorStop(0.85, `rgba(190,130,255,${0.12 * pulse + 0.1 * f})`); gr.addColorStop(1, `rgba(220,180,255,${0.5 * f + 0.15})`);
+  cx.fillStyle = gr; cx.beginPath(); cx.arc(0, 0, r * 1.05, 0, TAU); cx.fill();
+  cx.strokeStyle = `rgba(215,170,255,${0.35 + 0.5 * f})`; cx.lineWidth = 2; cx.setLineDash([10, 6]); cx.lineDashOffset = -T * 20; cx.beginPath(); cx.arc(0, 0, r * 1.04, 0, TAU); cx.stroke(); cx.setLineDash([]); cx.restore();
+}
+
+// ---------- planets: per-pixel fractal noise on a lit sphere ----------
+const PSIZE = 320;
+function h3(x, y, z) { let h = (x * 374761393 + y * 668265263 + z * 2147483647) | 0; h = (h ^ (h >>> 13)) * 1274126177 | 0; return ((h ^ (h >>> 16)) >>> 0) / 4294967296; }
+function vn(x, y, z) { const xi = floor(x), yi = floor(y), zi = floor(z), xf = x - xi, yf = y - yi, zf = z - zi, u = xf * xf * (3 - 2 * xf), v = yf * yf * (3 - 2 * yf), w = zf * zf * (3 - 2 * zf);
+  const a = (i, j, k) => h3(xi + i, yi + j, zi + k); return lerp(lerp(lerp(a(0, 0, 0), a(1, 0, 0), u), lerp(a(0, 1, 0), a(1, 1, 0), u), v), lerp(lerp(a(0, 0, 1), a(1, 0, 1), u), lerp(a(0, 1, 1), a(1, 1, 1), u), v), w); }
+function fbm(x, y, z, o = 5) { let s = 0, a = 0.5, f = 1; for (let i = 0; i < o; i++) { s += a * vn(x * f, y * f, z * f); f *= 2.03; a *= 0.5; } return s; }
+const hex = c => [parseInt(c.slice(1, 3), 16), parseInt(c.slice(3, 5), 16), parseInt(c.slice(5, 7), 16)];
+const mixc = (a, b, t) => [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t, a[2] + (b[2] - a[2]) * t];
+const ramp = (stops, t) => { for (let i = 1; i < stops.length; i++) if (t <= stops[i][0]) { const [t0, c0] = stops[i - 1], [t1, c1] = stops[i]; return mixc(c0, c1, (t - t0) / (t1 - t0 || 1)); } return stops[stops.length - 1][1]; };
+const R3 = a => a.map(([t, c]) => [t, hex(c)]);
+const PK = {
+  rocky: { atm: '#ffc89a', f: 2.2, ramp: R3([[0, '#3b2c22'], [0.4, '#6b5240'], [0.6, '#9b7b5d'], [0.8, '#c4a27c'], [1, '#e8d3b0']]) },
+  desert: { atm: '#ffe0a8', f: 1.8, ramp: R3([[0, '#7a4a22'], [0.4, '#b9803f'], [0.65, '#e0b878'], [1, '#f8e2b0']]), dunes: 1 },
+  ice: { atm: '#bfeaff', f: 2.4, ramp: R3([[0, '#7ea8c4'], [0.5, '#cfe8f5'], [1, '#ffffff']]), cracks: 1 },
+  lava: { atm: '#ff7a3a', f: 2.6, ramp: R3([[0, '#1a0a06'], [0.45, '#3a1a10'], [0.55, '#8a2a10'], [0.7, '#ff5a1a'], [1, '#ffd070']]), lava: 1 },
+  ocean: { atm: '#7fc8ff', f: 2.0, sea: 0.5, deep: '#0b2f66', shallow: '#2a7ad0', land: R3([[0, '#3f7a3a'], [0.5, '#6b8f46'], [0.8, '#8a7a52'], [1, '#d8d4c4']]), clouds: 0.55, caps: 1 },
+  jungle: { atm: '#9fe89a', f: 2.2, sea: 0.38, deep: '#0d3a4a', shallow: '#1f8a8c', land: R3([[0, '#134a1c'], [0.5, '#2d7a2a'], [0.8, '#5a9a3a'], [1, '#a8c070']]), clouds: 0.5, caps: 0.5 },
+  toxic: { atm: '#c8ff7a', f: 2.4, ramp: R3([[0, '#2e3d10'], [0.4, '#6a8a20'], [0.7, '#b8d040'], [1, '#f0f090']]), clouds: 0.8, cloudCol: '#e8f58a' },
+  gas: { atm: '#ffd9a0', bands: R3([[0, '#7a4a2a'], [0.25, '#c48a52'], [0.5, '#e6c898'], [0.75, '#a2643a'], [1, '#f2dcb0']]), spot: 1 },
+  storm: { atm: '#9ad0ff', bands: R3([[0, '#1d3a5a'], [0.3, '#3c6a9a'], [0.55, '#8ab4d8'], [0.8, '#2a4a70'], [1, '#c8e0f4']]), swirl: 1 },
+  ringed: { atm: '#ffe6b0', bands: R3([[0, '#a07a50'], [0.3, '#d8b888'], [0.6, '#b8946a'], [1, '#efdcb8']]), ring: 1 },
+  moon: { atm: null, f: 3.0, ramp: R3([[0, '#4a4a4e'], [0.5, '#8a8a8e'], [1, '#c8c8cc']]), craters: 1 },
+  city: { atm: '#7fb0ff', f: 2.0, sea: 0.48, deep: '#0a1f48', shallow: '#1a4a98', land: R3([[0, '#2a4a30'], [0.6, '#4a6a3a'], [1, '#8a8a70']]), clouds: 0.4, lights: 1 },
+};
+function planetCanvas(pl) {
+  const key = 'P' + pl.seed + pl.kind; if (SPR[key]) return SPR[key];
+  const size = PSIZE, c = SPR[key] = document.createElement('canvas'); c.width = c.height = size; const g = c.getContext('2d');
+  const K = PK[pl.kind] || PK.rocky, R = rng(pl.seed), sd = R() * 100, C = size / 2, rad = size * (PK[pl.kind] && PK[pl.kind].ring ? 0.25 : 0.36);
+  const tilt = (R() - 0.5) * 0.8, ct = cos(tilt), st = sin(tilt), L = [-0.55, -0.45, 0.7], ll = hypot(...L); L[0] /= ll; L[1] /= ll; L[2] /= ll;
+  const img = g.createImageData(size, size), D_ = img.data, atmC = K.atm ? hex(K.atm) : null;
+  const craters = []; if (K.craters) for (let i = 0; i < 28; i++) craters.push([R() * 2 - 1, R() * 2 - 1, R() * 2 - 1, 0.05 + R() * R() * 0.22]);
+  for (let py = 0; py < size; py++) for (let px = 0; px < size; px++) {
+    const dx = (px - C) / rad, dy = (py - C) / rad, d2_ = dx * dx + dy * dy, o = (py * size + px) * 4;
+    if (d2_ > 1.0) { // atmosphere halo
+      if (atmC) { const e = Math.max(0, 1 - (sqrt(d2_) - 1) / 0.16); if (e > 0) { const lit = clamp(0.35 + (dx * L[0] + dy * L[1]) * -0.5, 0.1, 1); D_[o] = atmC[0]; D_[o + 1] = atmC[1]; D_[o + 2] = atmC[2]; D_[o + 3] = e * e * 150 * lit; } }
+      continue;
+    }
+    const dz = sqrt(1 - d2_); let x = dx, y = dy * ct - dz * st, z = dy * st + dz * ct; // rotate for axial tilt
+    let col, spec = 0, night = 0;
+    if (K.bands) { const warp = fbm(x * 2 + sd, y * 2, z * 2, 3) * (K.swirl ? 0.5 : 0.22); let t = (y + warp * 0.6 + sin(y * 14 + fbm(x * 3, y * 3, sd) * 3) * 0.05) * 3.2; t = (t - floor(t)); const n = fbm(x * 6 + sd, y * 14, z * 6, 4); col = ramp(K.bands, clamp(t * 0.85 + n * 0.3, 0, 1));
+      if (K.spot) { const sx = x - 0.35, sy = y - 0.3, e = (sx * sx / 0.04 + sy * sy / 0.012); if (e < 1) col = mixc(col, hex('#b84a2a'), (1 - e) * 0.8); }
+      if (K.swirl) { const a = atan2(y - 0.1, x + 0.2), r = hypot(x + 0.2, y - 0.1); const sw = sin(a * 2 + r * 18 + fbm(x * 4, y * 4, z * 4) * 4); if (r < 0.5) col = mixc(col, [235, 245, 255], clamp(sw * 0.4 * (0.5 - r) * 2, 0, 0.5)); } }
+    else {
+      const f = K.f, h = fbm(x * f + sd, y * f + sd, z * f, 6);
+      if (K.sea !== undefined) { // continents + sea
+        if (h < K.sea) { const t = clamp(h / K.sea, 0, 1); col = mixc(hex(K.deep), hex(K.shallow), t * t * t); spec = 0.6; } else { col = ramp(K.land, clamp((h - K.sea) / (1 - K.sea) * 1.6, 0, 1)); }
+        const lat = abs(y); if (K.caps && lat > 0.82 - fbm(x * 4, y * 4, z * 4 + sd, 3) * 0.2 * K.caps - (h > K.sea ? 0.04 : 0)) col = mixc(col, [245, 248, 255], 0.85);
+      } else {
+        col = ramp(K.ramp, clamp(h * 1.25 - 0.1, 0, 1));
+        if (K.dunes) { const dn = sin((x * 5 + fbm(x * 3, y * 3, z * 3 + sd, 3) * 4) * 3); col = mixc(col, [255, 240, 200], clamp(dn * 0.12, 0, 0.18)); }
+        if (K.cracks) { const cr = abs(fbm(x * 7 + sd, y * 7, z * 7, 3) - 0.5); if (cr < 0.018) col = mixc(col, [90, 140, 190], 0.7); }
+        if (K.lava) { const cr = abs(fbm(x * 4.5 + sd, y * 4.5, z * 4.5, 4) - 0.5); if (cr < 0.045) { col = mixc(col, [255, 150, 40], 1 - cr / 0.045); night = 1; } }
+        if (K.craters) for (const q of craters) { const cd = hypot(x - q[0], y - q[1], z - q[2]); if (cd < q[3] && z > -0.1) { const t = cd / q[3]; col = mixc(col, t > 0.8 ? [220, 220, 224] : [50, 50, 54], t > 0.8 ? (t - 0.8) * 3 : (0.8 - t) * 0.6); } }
+      }
+      if (K.clouds) { const cl = fbm(x * 3.2 + sd * 2, y * 3.6, z * 3.2, 5); const cc = clamp((cl - (0.72 - K.clouds * 0.25)) * 3.4, 0, 0.8); if (cc > 0) col = mixc(col, K.cloudCol ? hex(K.cloudCol) : [250, 252, 255], cc); }
+    }
+    // lighting: lambert + terminator softness; atmosphere limb glow
+    const nx = dx, ny = dy, nz = dz, lam = nx * L[0] + ny * L[1] + nz * L[2], lit = clamp(lam * 1.15 + 0.08, 0, 1), amb = 0.07;
+    let sh = amb + (1 - amb) * lit * lit * (3 - 2 * lit);
+    if (K.lights && lit < 0.25) { const cn = fbm(x * 14 + sd, y * 14, z * 14, 3); if (cn > 0.62 && (K.sea === undefined || fbm(x * K.f + sd, y * K.f + sd, z * K.f, 6) > K.sea)) { const li = (cn - 0.62) * 6 * (0.25 - lit) * 4; col = mixc(col, [255, 210, 120], clamp(li, 0, 1)); sh = max(sh, 0.5 * clamp(li, 0, 1)); } }
+    let r = col[0] * sh, gg = col[1] * sh, b = col[2] * sh;
+    if (night) { r += col[0] * 0.5 * (1 - sh); gg += col[1] * 0.3 * (1 - sh); }
+    if (spec) { const hh = clamp(nx * (L[0]) + ny * (L[1]) + nz * (L[2] + 1), 0, 2) / 2; const sp = Math.pow(hh, 40) * spec * lit; r += 255 * sp; gg += 255 * sp; b += 255 * sp; }
+    if (atmC) { const rim = Math.pow(1 - nz, 2.6) * (0.2 + 0.8 * clamp(lam + 0.4, 0, 1)); r = r * (1 - rim * 0.6) + atmC[0] * rim * 0.6; gg = gg * (1 - rim * 0.6) + atmC[1] * rim * 0.6; b = b * (1 - rim * 0.6) + atmC[2] * rim * 0.6; }
+    const edge = clamp((1 - sqrt(d2_)) * rad / 1.5, 0, 1);
+    D_[o] = r; D_[o + 1] = gg; D_[o + 2] = b; D_[o + 3] = 255 * edge;
+  }
+  g.putImageData(img, 0, 0);
+  if (K.ring) { // tilted ring: back half behind the planet already hidden by painting order -> draw whole ring, then redraw the planet front over the near half
+    const rr = rad * 1.9, ry = rr * 0.28, rot = -0.35 + (R() - 0.5) * 0.3;
+    const pl2 = document.createElement('canvas'); pl2.width = pl2.height = size; pl2.getContext('2d').drawImage(c, 0, 0);
+    g.clearRect(0, 0, size, size);
+    const drawRing = (back) => { g.save(); g.translate(C, C); g.rotate(rot); g.beginPath(); g.rect(-size, back ? -size : 0, size * 2, size); g.clip();
+      for (let k = 0; k < 14; k++) { const t = k / 13, r0 = rr * (0.62 + t * 0.38), a = 0.12 + 0.45 * abs(sin(k * 1.9 + pl.seed)) * (k % 5 === 4 ? 0.2 : 1); g.strokeStyle = `rgba(${220 - k * 3},${196 - k * 4},${150 - k * 4},${a})`; g.lineWidth = rr * 0.035; g.beginPath(); g.ellipse(0, 0, r0, r0 * 0.28, 0, 0, TAU); g.stroke(); } g.restore(); };
+    drawRing(true); g.drawImage(pl2, 0, 0); drawRing(false);
+  }
   return c;
 }
+
 // starfield + nebula
 const STARS = []; for (let l = 0; l < 3; l++) for (let i = 0; i < 120; i++) STARS.push({ l, x: random() * 2000, y: random() * 2000, s: random() * 1.3 + 0.3 + l * 0.35, c: ['#9bf', '#fff', '#ffd', '#cdf'][floor(random() * 4)] });
 const neb = document.createElement('canvas'); neb.width = neb.height = 512; { const g = neb.getContext('2d'); for (let i = 0; i < 9; i++) { const x = random() * 512, y = random() * 512, r = 80 + random() * 160, col = ['#3a1a6a', '#6a1a3a', '#1a3a6a', '#2a1050'][i % 4]; for (const ox of [-512, 0, 512]) for (const oy of [-512, 0, 512]) { const gr = g.createRadialGradient(x + ox, y + oy, 0, x + ox, y + oy, r); gr.addColorStop(0, col + '40'); gr.addColorStop(1, col + '00'); g.fillStyle = gr; g.fillRect(0, 0, 512, 512); } } }
-const glowC = {}; function glow(col, r) { const k = col + r; if (glowC[k]) return glowC[k]; const c = document.createElement('canvas'); c.width = c.height = r * 2; const g = c.getContext('2d'), gr = g.createRadialGradient(r, r, 0, r, r, r); gr.addColorStop(0, col); gr.addColorStop(0.35, col + '88'); gr.addColorStop(1, col + '00'); g.fillStyle = gr; g.fillRect(0, 0, r * 2, r * 2); return glowC[k] = c; }
+const glowC = {}; function glow(col, r) { if (col.length === 4) col = '#' + col[1] + col[1] + col[2] + col[2] + col[3] + col[3]; const k = col + r; if (glowC[k]) return glowC[k]; const c = document.createElement('canvas'); c.width = c.height = r * 2; const g = c.getContext('2d'), gr = g.createRadialGradient(r, r, 0, r, r, r); gr.addColorStop(0, col); gr.addColorStop(0.35, col + '88'); gr.addColorStop(1, col + '00'); g.fillStyle = gr; g.fillRect(0, 0, r * 2, r * 2); return glowC[k] = c; }
 
 // ---------- net ----------
 function connect() {
@@ -226,8 +370,15 @@ function onSnap(m) {
   if (!prev || prev.ph !== m.ph) phaseChange(prev ? prev.ph : '', m.ph, m);
   hudDom(m);
 }
+SFX.lance = function () { tone(90, 0.9, 'sawtooth', 0.14, 900); noise(0.7, 0.15, 3000, 200, 'bandpass'); };
+// ---------- section / port names ----------
+function portInfo(role, slot) { const c = lastSnap && lastSnap.crew[role]; const p = c && c[7] && c[7][slot]; if (!p) return null; const t = TREES[TREE_OF[role]].ports.find(x => x[0] === p[0]); return { id: p[0], lv: p[1], name: t ? t[1] : p[0], desc: t ? t[2] : '' }; }
+function secName(k) { if (k < 6) return PORT_NAMES[k]; const r = (k - 6) >> 1, sl = (k - 6) & 1, p = portInfo(r, sl); return RSHORT[r] + ' ' + (p ? p.name : 'port ' + (sl + 1)); }
+function secShort(k) { if (k < 6) return PORT_NAMES[k].replace(' Gun Turret', ' Gun').replace('Deflector Generator', 'Deflector'); const r = (k - 6) >> 1, sl = (k - 6) & 1, p = portInfo(r, sl); return RSHORT[r] + ' ' + (p ? p.name : 'port'); }
+const secRole = k => k < 6 ? k : (k - 6) >> 1;
 const hitT = new Map(), floaters = [];
 function evName(i) { const c = lastSnap && lastSnap.crew[i]; return c ? c[0] : RNAME[i]; }
+function secWorldLocal(k, mk) { const g = GEO[mk]; return k < 6 ? g.st[k] : (g.po[(k - 6) >> 1][(k - 6) & 1] || g.st[(k - 6) >> 1]); }
 function processEvents(s) {
   for (const e of s.ev) {
     const k = e[0];
@@ -236,17 +387,26 @@ function processEvents(s) {
     else if (k === 'ef') { P({ k: 2, x: e[1], y: e[2], life: e[4] ? 0.25 : 0.08, max: e[4] ? 0.25 : 0.08, r: e[4] ? 30 : 12, c: ENEMY_GREEN }); SFX.elaser(e[3], e[1], e[4]); }
     else if (k === 'boom') explosion(e[1], e[2], e[3], e[4]);
     else if (k === 'hit') hitT.set(e[3], performance.now());
+    else if (k === 'esh') { hitT.set(e[3], performance.now()); sparks(e[1] + (random() - .5) * 40, e[2] + (random() - .5) * 40, 3, '#d6a8ff', 120, 0.25, 1.5); if (gate('esh', 60)) tone(1500, 0.07, 'triangle', 0.04, 900, e[1]); }
+    else if (k === 'shk') { ring(e[1], e[2], 6, e[3] * 1.4, 0.5, '#d6a8ff', 4); sparks(e[1], e[2], 24, '#e6c8ff', 260, 0.6, 2.2); toast('Enemy shield broken: hit the hull now', '#d6a8ff'); tone(300, 0.4, 'sawtooth', 0.07, 1200, e[1]); }
     else if (k === 'arm') { sparks(e[1], e[2], 5, '#cfe6ff', 160, 0.25, 1.5); SFX.armor(e[1]); }
-    else if (k === 'pk') { explosion(e[3], e[4], 1, 14); toast('💥 Enemy gun port destroyed', '#ffcf6a'); }
-    else if (k === 'pd') { sparks(e[1], e[2], 6, e[3] ? '#ffaa33' : ENEMY_GREEN, 160, 0.25, 1.5); SFX.pd(e[1]); }
-    else if (k === 'blk') { const s2 = lastSnap ? lastSnap.sh : null; ring(e[1], e[2], 2, 22, 0.25, MODE_C[s2 ? s2.sm : 0], 2); sparks(e[1], e[2], 5, MODE_C[s2 ? s2.sm : 0], 120, 0.25, 1.5); SFX.block(e[3], e[1]); }
+    else if (k === 'pk') { explosion(e[3], e[4], 1, 14); toast(e[5] ? '💥 Enemy shipping dock destroyed: no more fighters' : '💥 Enemy gun port destroyed', '#ffcf6a'); }
+    else if (k === 'dock') { ring(e[1], e[2], 4, 40, 0.4, '#ffd24a', 3); sparks(e[1], e[2], 10, '#ffd24a', 120, 0.4, 2); SFX.launch(); }
+    else if (k === 'pd') { sparks(e[1], e[2], 6, ENEMY_GREEN, 160, 0.25, 1.5); SFX.pd(e[1]); }
+    else if (k === 'blk') { ring(e[1], e[2], 2, 24, 0.25, SHIELD_BLUE, 2); sparks(e[1], e[2], 5, SHIELD_BLUE, 120, 0.25, 1.5); SFX.block(e[3], e[1]); }
+    else if (k === 'shb') { toast('🛡 SHIELD DOWN: 20s to power back up', '#7ab8ff'); tone(500, 0.6, 'sawtooth', 0.09, 70); if (lastSnap) { const sh = lastSnap.sh; ring(sh.x, sh.y, 40, 130, 0.5, SHIELD_BLUE, 5); sparks(sh.x, sh.y, 30, SHIELD_BLUE, 260, 0.6, 2); } if (me.role === SHIELD) banner('SHIELD DOWN<br><span style="font-size:.5em">20s recharge</span>', 1.6); }
+    else if (k === 'shu') { toast('🛡 Shield online', '#7ab8ff'); [600, 900, 1300].forEach((f, i) => tone(f, 0.15, 'triangle', 0.07, null, null, i * 0.06)); }
+    else if (k === 'lance') { SFX.lance(); shake = max(shake, 8); toast(e[1] ? '🛡 NOVA LANCE: shield fired in all directions' : '🛡 SHIELD LANCE fired', '#7ab8ff'); }
+    else if (k === 'flare') { ring(e[1], e[2], 10, 360, 0.5, '#ffd890', 3); tone(900, 0.3, 'triangle', 0.07, 200); }
+    else if (k === 'warp') { ring(e[1], e[2], 40, 4, 0.4, '#bff', 3); ring(e[3], e[4], 4, 50, 0.4, '#bff', 3); tone(200, 0.35, 'sine', 0.1, 1600); }
     else if (k === 'graze') { sparks(e[1], e[2], 6, '#fff', 150, 0.3, 1.5); }
-    else if (k === 'sh') { sparks(e[1], e[2], 14, '#ff6a3a', 260, 0.5, 2); SFX.hit(); shake = max(shake, 9); if (e[3] === me.role) { flash = 0.35; flashC = '#f00'; } }
-    else if (k === 'sd') { toast('⚠ ' + PORT_NAMES[e[1]] + ' DESTROYED', '#f66'); SFX.alarm(); if (e[1] === me.role) banner('YOUR STATION IS DOWN<br><span style="font-size:.5em">hold FIRE to self-patch · the Repair crew sees it too</span>', 2.6); }
-    else if (k === 'sr') { toast('✔ ' + PORT_NAMES[e[1]] + ' back online', '#7f7'); SFX.fixed(); }
-    else if (k === 'flip') { if (me.role === SHIELD) SFX.flip(e[1]); }
+    else if (k === 'sh') { sparks(e[1], e[2], 14, '#ff6a3a', 260, 0.5, 2); SFX.hit(); shake = max(shake, 9); if (secRole(e[3]) === me.role) { flash = 0.35; flashC = '#f00'; } }
+    else if (k === 'sd') { toast('⚠ ' + secName(e[1]) + ' DESTROYED: on fire, benefits lost', '#f66'); SFX.alarm(); if (e[1] === me.role) banner('YOUR STATION IS DOWN<br><span style="font-size:.5em">hold FIRE to self-patch · the Repair crew sees it too</span>', 2.6); }
+    else if (k === 'sr') { toast('✔ ' + secName(e[1]) + ' back online', '#7f7'); SFX.fixed(); }
+    else if (k === 'port') { toast('🛠 ' + RSHORT[e[1]] + ' port ' + (e[2] + 1) + ' installed: ' + (portInfo(e[1], e[2]) || { name: e[3] }).name, '#6df'); SFX.core(); }
+    else if (k === 'cv') { SFX.coin(); }
     else if (k === 'pip') { if (me.role === ENG) SFX.pip(); }
-    else if (k === 'ab') { const a = ABIL[e[2]]; if (e[1] === me.role) SFX.ability(); else if (a && a.buff) toast('⚡ ' + evName(e[1]) + ': ' + a.n, '#ffd54a'); if (e[2] === 'cry') { banner('⚔ BATTLE CRY', 1.4); SFX.buff(); } if (e[2] === 'aegis' && e[1] !== me.role) SFX.buff(); }
+    else if (k === 'ab') { const a = ABIL[e[2]]; if (e[1] === me.role) SFX.ability(); else if (a && a.buff) toast('⚡ ' + evName(e[1]) + ': ' + a.n, '#ffd54a'); if (e[2] === 'cry') { banner('⚔ BATTLE CRY', 1.4); SFX.buff(); } if ((e[2] === 'aegis' || e[2] === 'surge' || e[2] === 'rally' || e[2] === 'medic') && e[1] !== me.role) SFX.buff(); }
     else if (k === 'buff') { if (e[2] === me.role) { banner(e[1] === 'reroute' ? '⚡ ENGINE POWER REROUTED TO YOU<br><span style="font-size:.5em">+50% fire rate · faster turret · +30% damage</span>' : '💉 STIM: +40% station speed', 1.8); SFX.buff(); } }
     else if (k === 'bl') SFX.bomb();
     else if (k === 'launch') { if (me.role === REPAIR) SFX.launch(); }
@@ -260,12 +420,13 @@ function processEvents(s) {
     else if (k === 'ms') { banner(e[1] + '<br><span style="font-size:.45em">' + (MTYPES[e[2]] || {}).n + '</span>', 2.4); SFX.wave(); }
     else if (k === 'win') { banner('MISSION COMPLETE', 2.4); SFX.win(); }
     else if (k === 'lose') { banner('SHIP LOST', 2.4); SFX.lose(); }
-    else if (k === 'mk') { toast('🛠 Ship upgraded to ' + MK_NAMES[e[1]] + ': every station gets a new weapon port', '#6df'); SFX.core(); }
+    else if (k === 'mk') { toast('🛠 Ship upgraded to ' + MK_NAMES[e[1]] + ': the hull grew new hard-points', '#6df'); SFX.core(); }
     else if (k === 'join') toast('👤 ' + e[1] + ' joined as ' + RNAME[e[2]]);
     else if (k === 'leave') toast(e[1] + ' left · a bot took over ' + RNAME[e[2]], '#99a');
     else if (k === 'swap') toast(e[1] + ' moved to ' + RNAME[e[2]]);
   }
 }
+
 function interp() {
   if (!snaps.length) return null;
   const rt = performance.now() / 1000 + offset - 0.11;
@@ -281,7 +442,7 @@ function interp() {
   o.eb = b.eb.map(q => { const p = a.bMap.get(q[0]); return p ? [q[0], L(p, q, 1), L(p, q, 2), q[3], q[4], q[5]] : q; });
   o.pp = b.pp.map(q => { const p = a.pMap.get(q[0]); return p ? [q[0], L(p, q, 1), L(p, q, 2), lerpA(p[3], q[3], t), q[4]] : q; });
   o.al = b.al.map(q => { const p = a.aMap.get(q[0]); return p ? [q[0], q[1], L(p, q, 2), L(p, q, 3), lerpA(p[4], q[4], t), q[5], q[6]] : q; });
-  o.pk = b.pk.map(q => { const p = a.kMap.get(q[0]); return p ? [q[0], L(p, q, 1), L(p, q, 2), q[3]] : q; });
+  o.wv = b.wv; o.pk = b.pk.map(q => { const p = a.kMap.get(q[0]); return p ? [q[0], L(p, q, 1), L(p, q, 2), q[3]] : q; });
   while (snaps.length > 2 && snaps[1].tm < rt - 0.5) snaps.shift();
   return o;
 }
@@ -296,18 +457,17 @@ addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT') { if (e.key === 'Enter' && !joined) launch(); return; }
   const k = e.key.toLowerCase(); if (k === ' ' || k === 'tab') e.preventDefault(); if (K[k]) return; K[k] = 1; audioInit(); if (!joined) return;
   if (k === 'q' || k === 'e' || k === 'r') act(k);
-  if (k === ' ') act('alt');
   if (k === 'm') setMute(!A.muted); if (k === 'n') setMusic(!A.music);
   if (k === 'h' || k === '?') toggleCard(); if (k === 'tab') togglePanel('rolesp'); if (k === 'u') togglePanel('upp');
   if (k === 'escape') { $('rolesp').classList.add('hide'); $('upp').classList.add('hide'); $('card').classList.add('hide'); }
   if (me.role === ENG && k >= '1' && k <= '4') act('p' + k);
-  if (me.role === REPAIR && k >= '0' && k <= '6') rtSel = k === '0' ? 6 : +k - 1;
+  if (me.role === REPAIR && k >= '0' && k <= '6') rtSel = k === '0' ? 18 : +k - 1;
   if (me.role === ENG && (k === 'w' || k === 'arrowup')) setThr(thr + 0.125); if (me.role === ENG && (k === 's' || k === 'arrowdown')) setThr(thr - 0.125);
 });
 addEventListener('keyup', e => { K[e.key.toLowerCase()] = 0; });
 addEventListener('blur', () => { for (const k in K) K[k] = 0; mouse.down = 0; });
 cv.addEventListener('mousemove', e => { mouse.x = e.clientX; mouse.y = e.clientY; });
-cv.addEventListener('mousedown', e => { audioInit(); mouse.x = e.clientX; mouse.y = e.clientY; if (e.button === 2) act('alt'); else mouse.down = 1; });
+cv.addEventListener('mousedown', e => { audioInit(); mouse.x = e.clientX; mouse.y = e.clientY; if (e.button !== 2) mouse.down = 1; });
 addEventListener('mouseup', e => { if (e.button !== 2) mouse.down = 0; });
 cv.addEventListener('contextmenu', e => e.preventDefault());
 cv.addEventListener('wheel', e => { if (me.role === ENG) setThr(thr - Math.sign(e.deltaY) * 0.0625); e.preventDefault(); }, { passive: false });
@@ -322,7 +482,7 @@ function setupTouch() {
   const hold = (id, k) => { const b = $(id); b.addEventListener('touchstart', e => { audioInit(); tb[k] = 1; e.preventDefault(); }, { passive: false }); b.addEventListener('touchend', e => { tb[k] = 0; e.preventDefault(); }, { passive: false }); };
   hold('t-f', 'f'); hold('t-as', 'as');
   const tap = (id, fn) => $(id).addEventListener('touchstart', e => { audioInit(); fn(); e.preventDefault(); }, { passive: false });
-  tap('t-q', () => act('q')); tap('t-e', () => act('e')); tap('t-r', () => act('r')); tap('t-alt', () => act('alt')); tap('t-up', () => togglePanel('upp'));
+  tap('t-q', () => act('q')); tap('t-e', () => act('e')); tap('t-r', () => act('r')); tap('t-up', () => togglePanel('upp'));
 }
 function aimWorld(s) {
   if (isTouch && s) {
@@ -343,10 +503,10 @@ setInterval(() => {
 function toast(m, c) { const d = document.createElement('div'); d.innerHTML = m; if (c) d.style.color = c; $('toasts').appendChild(d); setTimeout(() => d.remove(), 3300); while ($('toasts').children.length > 4) $('toasts').firstChild.remove(); }
 let bannerT = 0; function banner(t, d = 2) { $('banner').innerHTML = t; bannerT = d; }
 let cardTimer = null;
-function abilityList(r) { return TREES[TREE_OF[r]].br.map(b => { const n = b.nodes.find(x => x[3]); return `<b class="y">${b.k}</b> ${n[1]}`; }).join(' · '); }
+function abilityList(r) { const T = TREES[TREE_OF[r]], inn = D.INNATE[TREE_OF[r]], P = me.tr && me.tr[TREE_OF[r]], l = []; if (inn) l.push(`<b class="y">Q</b> ${ABIL[inn].n}`); if (P) P.path.forEach((i, rw) => { const n = T.rows[rw][i]; if (n && n.ab) l.push(`<b class="y">${rw < 2 ? 'E' : 'R'}</b> ${ABIL[n.ab].n}`); }); return l.join(' · ') || 'none yet'; }
 function showCard() {
   const r = me.role; if (r < 0) return;
-  $('card').innerHTML = `<span class="x">H toggles · click to close</span><h2>${RICON[r]} YOU ARE: ${RNAME[r]} · ${PORT_NAMES[r]}</h2><div>${ROLE_HELP[r]}</div><div style="margin-top:4px">Abilities: ${abilityList(r)}</div><div class="small" style="margin-top:6px;color:#bb9">${COMMON}${isTouch ? '<br>Touch: stick aims · FIRE · Q/E/R abilities · FLIP · ASSIST · ★ upgrades' : ''}</div>`;
+  $('card').innerHTML = `<span class="x">H toggles · click to close</span><h2>${RICON[r]} YOU ARE: ${RNAME[r]} · ${PORT_NAMES[r]}</h2><div>${ROLE_HELP[r]}</div><div style="margin-top:4px">Abilities: ${abilityList(r)}</div><div class="small" style="margin-top:6px;color:#bb9">${COMMON}${isTouch ? '<br>Touch: stick aims · FIRE · Q/E/R abilities · ASSIST · ★ upgrades' : ''}</div>`;
   $('card').classList.remove('hide'); clearTimeout(cardTimer); cardTimer = setTimeout(() => $('card').classList.add('hide'), 10000);
 }
 function toggleCard() { if ($('card').classList.contains('hide')) showCard(); else $('card').classList.add('hide'); }
@@ -360,29 +520,59 @@ function renderRoles() {
   $('rolesp').innerHTML = '<h2>⇄ SWITCH STATION</h2><div class="small" style="margin-bottom:8px">Take any bot seat instantly. Credits are yours; each role has its own skill tree.</div><div class="rgrid">' + order.map(i => { const c = s.crew[i], mine = i === me.role; return `<button data-r="${i}" ${mine ? 'style="border-color:#ffd54a;color:#ffd54a"' : ''}>${RICON[i]} ${RNAME[i]}<small>${PORT_NAMES[i]} · ${mine ? 'YOU' : c[1] ? '🤖 ' + c[0] + ' (bot): take over' : '👤 ' + c[0]}</small></button>`; }).join('') + '</div>' + closeBtn;
   $('rolesp').querySelectorAll('[data-r]').forEach(b => b.onclick = () => { send({ t: 'role', role: +b.dataset.r }); SFX.ui(); setTimeout(() => $('rolesp').classList.add('hide'), 150); });
 }
-// ----- upgrade screen -----
-let upTree = 'pilot';
+// ----- upgrade screen: skill pyramid -----
+let upTree = 'pilot', portPending = null;
 const TREE_LABEL = { pilot: 'Pilot', gun: 'Gunners', engineer: 'Engineer', shield: 'Shields', repair: 'Repair/Drone' };
+function pyrNode(T, P, r, i, mk, inMission) {
+  const n = T.rows[r][i], picked = P.path[r] === i, next = P.path.length === r, done = P.path.length > r;
+  const allowed = next && pyrAllowed(P.path, r).includes(i), cost = NODE_COST[r], can = allowed && me.cr >= cost && !inMission;
+  const cls = ['pn', picked ? 'own' : '', allowed ? 'ok' : '', done && !picked ? 'skip' : '', !done && !allowed ? 'lock' : '', n.ab ? 'act' : '', n.edge ? 'edge' : '', n.cap ? 'cap' : ''].join(' ');
+  const tag = n.ab ? `<span class="y">[${r < 2 ? 'E' : 'R'}]</span> ` : '';
+  return `<button class="${cls}" style="grid-column:${r + 2 * i + 1}/span 2;grid-row:${r + 1}" data-buy="node" data-id="${n.id}" ${can ? '' : 'disabled'} title="${n.d.replace(/"/g, '&quot;')}"><b>${picked ? '✔ ' : ''}${tag}${n.n}</b><small>${n.d}</small><i>${picked ? 'PICKED' : allowed ? cost + '¢' : done ? '' : 'row ' + (r + 1)}${n.edge ? ' · ◀▶ edge' : ''}</i></button>`;
+}
 function renderUp() {
   if (me.role < 0 || !me.tr || !lastSnap) return;
   const s = lastSnap, mk = s.mk, T = TREES[upTree], P = me.tr[upTree], inMission = s.ph === 'mission' || s.ph === 'result';
   const btn = (attrs, html, dis, cls = '') => `<button class="nd ${cls}" ${attrs} ${dis ? 'disabled' : ''}>${html}</button>`;
+  const myT = TREE_OF[me.role];
   let h = `<h2>★ UPGRADES · <span class="y">${me.cr} ¢</span> · <span class="c">${s.co} ◆ crew cores</span> · ${MK_NAMES[mk]}</h2>`;
-  h += `<div class="row" style="margin:4px 0">${Object.keys(TREES).map(k => `<button data-tree="${k}" style="flex:0 0 auto;min-width:0;${k === upTree ? 'border-color:#ffd54a;color:#ffd54a' : ''}">${TREE_LABEL[k]}${k === TREE_OF[me.role] ? ' (you)' : ''}</button>`).join('')}</div>`;
+  h += `<div class="row" style="margin:4px 0">${Object.keys(TREES).map(k => `<button data-tree="${k}" style="flex:0 0 auto;min-width:0;${k === upTree ? 'border-color:#ffd54a;color:#ffd54a' : ''}">${TREE_LABEL[k]}${k === myT ? ' (you)' : ''}</button>`).join('')}</div>`;
   if (inMission) h += '<div class="small r">Purchases unlock after the mission. You can still plan here.</div>';
+  h += `<div class="small">Credits come from kills, big-ship drops and a completion bonus (the whole crew earns the same). Missions are long: expect to need <b>many</b> to finish a tree. Cores (◆) are rare and shared: Mk II costs ${MK_COST[1]} ◆, Mk III ${MK_COST[2]} ◆. After Mk III each spare ◆ converts to <b>${CORE_RATE} ¢</b> per crew member.</div>`;
+  // ship tier panel
   const nextMk = mk + 1;
-  h += `<div class="small">Credits drop from destroyed enemies (fly close to collect) plus a completion bonus; the whole crew earns the same. Crew cores (◆) are rare and shared: they buy ship upgrades that give <b>every station</b> an extra weapon port.</div>`;
-  h += `<div class="row">${nextMk <= 2 ? `<button data-mk ${s.co < MK_COST[nextMk] || inMission ? 'disabled' : ''} style="border-color:#6df">🛠 Upgrade ship to <b>${MK_NAMES[nextMk]}</b>: ${MK_COST[nextMk]} ◆ (crew-wide)</button>` : '<div class="small g">Ship fully upgraded (Mk III)</div>'}</div>`;
-  h += '<div class="cols">' + T.br.map((b, bi) => `<div class="col"><h4>${b.n} <span class="y">[${b.k}]</span></h4>` + b.nodes.map((n, j) => { const own = P.n[n[0]], prevOwn = j === 0 || P.n[b.nodes[j - 1][0]], mkReq = n[4] || 0, can = !own && prevOwn && mk >= mkReq && me.cr >= NODE_COST[j] && !inMission; return btn(`data-buy="node" data-id="${n[0]}"`, `${own ? '✔ ' : ''}<b>${n[1]}</b>${n[3] ? ` <span class="y">[${b.k}]</span>` : ''} ${own ? '' : `· ${NODE_COST[j]}¢`}${mkReq > mk ? ` · <span class="c">needs ${MK_NAMES[mkReq]}</span>` : ''}<small>${n[2]}</small>`, !can, (own ? 'own ' : '') + (n[3] ? 'act' : '')); }).join('') + '</div>').join('') + '</div>';
-  h += '<div class="row">' + T.inf.map(x => { const lv = P.i[x[0]] || 0, c = infCost(lv); return btn(`data-buy="inf" data-id="${x[0]}"`, `<b>${x[1]}</b> · Lv ${lv} · ${c}¢<small>${x[2]} per level, no cap</small>`, me.cr < c || inMission); }).join('') + '</div>';
+  h += `<div class="mkrow"><canvas id="mkprev" width="260" height="110"></canvas><div>` + (nextMk <= 2
+    ? `<div class="small">Ship upgrade: the hull physically grows (Mk II and III are larger) and every crew station gains <b>one new permanent port socket</b>.</div><button data-mk ${s.co < MK_COST[nextMk] || inMission ? 'disabled' : ''} style="border-color:#6df;margin-top:4px">🛠 Upgrade ship to <b>${MK_NAMES[nextMk]}</b> · ${MK_COST[nextMk]} ◆ (crew-wide, resets damage)</button>`
+    : `<div class="small g">Ship fully upgraded (Mk III).</div><button data-core ${s.co < 1 || inMission ? 'disabled' : ''} style="border-color:#ffd54a;margin-top:4px">◆ → ¢ Convert 1 core into ${CORE_RATE} ¢ for every crew member (${s.co} ◆ banked)</button>`) + `</div></div>`;
+  // pyramid
+  const pr = P.path.length;
+  h += `<h4 class="ph">${T.name || TREE_LABEL[upTree]} skill pyramid <span class="small">· pick ONE node per row, top to bottom. The next row only offers the nodes touching your last pick (an edge pick leaves one choice, a middle pick two). Edge nodes are ~25% stronger; the bottom two are the best.${pr >= 5 ? ' <b class="g">Complete.</b>' : ' Now choosing row ' + (pr + 1) + ' of 5 · ' + NODE_COST[pr] + '¢'}</span></h4>`;
+  h += '<div class="pyr">' + T.rows.map((row, r) => row.map((n, i) => pyrNode(T, P, r, i, mk, inMission)).join('')).join('') + '</div>';
+  h += '<div class="row">' + T.inf.map(x => { const lv = P.i[x[0]] || 0, c = infCost(lv), cap = infCap(upTree, x[0], lv); return btn(`data-buy="inf" data-id="${x[0]}"`, `<b>${x[1]}</b> · Lv ${lv} · ${cap ? 'MAX' : c + '¢'}<small>${x[0] === 'i_arc' ? '+5° of shield arc per level (cap 90°)' : 'per level, no cap'}</small>`, cap || me.cr < c || inMission); }).join('') + '</div>';
   h += '<div class="row">' + T.big.map(x => { const own = P.b[x[0]]; return btn(`data-buy="big" data-id="${x[0]}"`, `${own ? '✔ ' : '★ '}<b>${x[1]}</b> ${own ? '' : '· ' + x[3] + '¢'}${x[4] > mk ? ` · <span class="c">needs ${MK_NAMES[x[4]]}</span>` : ''}<small>${x[2]}</small>`, own || me.cr < x[3] || x[4] > mk || inMission, own ? 'own' : ''); }).join('') + '</div>';
-  h += '<div class="row">' + [0, 1].map(sl => `<div class="col"><h4>Weapon port ${sl + 1} ${sl >= mk ? `<span class="c">(needs ${MK_NAMES[sl + 1]})</span>` : ''}</h4>${T.ports.map(p => btn(`data-port="${sl}" data-id="${p[0]}"`, `${P.p[sl] === p[0] ? '✔ ' : ''}<b>${p[1]}</b><small>${p[2]}</small>`, sl >= mk || inMission, P.p[sl] === p[0] ? 'own' : '')).join('')}</div>`).join('') + '</div>';
+  // ports (this seat only; permanent)
+  if (upTree === myT) {
+    const crew = s.crew[me.role], inst = crew[7] || [0, 0];
+    h += `<h4 class="ph">Ship ports for your station (${RNAME[me.role]}) <span class="small">· a port is a real section on the hull: it can be destroyed on its own (small fire, benefits lost) and each port is upgraded separately. <b class="r">A port choice is permanent.</b></span></h4><div class="row">`;
+    for (let sl = 0; sl < 2; sl++) {
+      h += `<div class="col"><h4>Port ${sl + 1} ${sl >= mk ? `<span class="c">(needs ${MK_NAMES[sl + 1]})</span>` : ''}</h4>`;
+      const p = inst[sl];
+      if (p) { const t = T.ports.find(x => x[0] === p[0]), lv = p[1], c = portUpCost(lv); h += `<div class="nd own"><b>✔ ${t[1]}</b> · Lv ${lv}/${PORT_MAX_LV}<small>${t[2]} · each level: +12% effect, +0.4 section HP</small></div>` + btn(`data-pup="${sl}"`, lv >= PORT_MAX_LV ? 'Fully upgraded' : `▲ Upgrade ${t[1]} → Lv ${lv + 1} · ${c}¢`, lv >= PORT_MAX_LV || me.cr < c || inMission); }
+      else h += T.ports.map(p => { const pend = portPending && portPending[0] === sl && portPending[1] === p[0]; return btn(`data-port="${sl}" data-id="${p[0]}"`, `<b>${pend ? '⚠ CLICK AGAIN: PERMANENT · ' : ''}${p[1]}</b> · ${PORT_COST[sl]}¢<small>${p[2]}</small>`, sl >= mk || me.cr < PORT_COST[sl] || inMission, pend ? 'warn' : ''); }).join('');
+      h += '</div>';
+    }
+    h += '</div>';
+  } else h += '<div class="small">Switch to that station (⇄) to buy ports for it.</div>';
   h += '<div id="upfoot"><span id="upst" class="small"></span><span><button data-close>Close (U)</button> <button id="rdy" class="hide">READY ✔</button></span></div>';
   $('upp').innerHTML = h; upFoot();
+  { const c = $('mkprev').getContext('2d'); c.clearRect(0, 0, 260, 110); c.fillStyle = 'rgba(0,0,0,.35)'; c.fillRect(0, 0, 260, 110); const sp = playerSprite(mk), W0 = sp.hw * 2, H0 = sp.hh * 2, sc = min(1, 150 / W0, 100 / H0); c.drawImage(sp, 80 - W0 * sc / 2, 55 - H0 * sc / 2, W0 * sc, H0 * sc);
+    if (nextMk <= 2) { const sp2 = playerSprite(nextMk), W2 = sp2.hw * 2, H2 = sp2.hh * 2, sc2 = min(1, 110 / W2, 100 / H2); c.globalAlpha = 0.6; c.drawImage(sp2, 200 - W2 * sc2 / 2, 55 - H2 * sc2 / 2, W2 * sc2, H2 * sc2); c.globalAlpha = 1; c.fillStyle = '#6df'; c.font = '16px monospace'; c.fillText('▶', 142, 60); } }
   $('upp').querySelectorAll('[data-tree]').forEach(b => b.onclick = () => { upTree = b.dataset.tree; SFX.ui(); renderUp(); });
   $('upp').querySelectorAll('[data-buy]').forEach(b => b.onclick = () => { send({ t: 'buy', tree: upTree, kind: b.dataset.buy, id: b.dataset.id }); SFX.coin(); });
-  $('upp').querySelectorAll('[data-port]').forEach(b => b.onclick = () => { send({ t: 'buy', tree: upTree, kind: 'port', id: b.dataset.id, slot: +b.dataset.port }); SFX.ui(); });
+  $('upp').querySelectorAll('[data-port]').forEach(b => b.onclick = () => { const sl = +b.dataset.port, id = b.dataset.id; if (portPending && portPending[0] === sl && portPending[1] === id) { send({ t: 'buy', tree: upTree, kind: 'port', id, slot: sl }); portPending = null; SFX.core(); } else { portPending = [sl, id]; SFX.ui(); renderUp(); } });
+  $('upp').querySelectorAll('[data-pup]').forEach(b => b.onclick = () => { send({ t: 'buy', tree: upTree, kind: 'pup', slot: +b.dataset.pup }); SFX.coin(); });
   const mb = $('upp').querySelector('[data-mk]'); if (mb) mb.onclick = () => { send({ t: 'mk' }); SFX.core(); };
+  const cb = $('upp').querySelector('[data-core]'); if (cb) cb.onclick = () => { send({ t: 'core' }); SFX.coin(); };
   $('rdy').onclick = () => { const r = lastSnap && lastSnap.rdy && lastSnap.rdy.includes(me.pid); send({ t: 'ready', v: r ? 0 : 1 }); SFX.ui(); };
 }
 function upFoot() {
@@ -390,6 +580,7 @@ function upFoot() {
   if (s.ph === 'upgrade') { const hum = s.crew.filter(c => !c[1]).length, r = (s.rdy || []).length, mine = (s.rdy || []).includes(me.pid); rb.classList.remove('hide'); rb.textContent = mine ? 'READY ✔ (undo)' : 'READY ▶'; rb.style.background = mine ? 'rgba(20,80,30,.9)' : ''; st.innerHTML = `Next: star map in <b class="y">${Math.ceil(s.pt)}s</b> · ready ${r}/${hum} players · bots are always ready`; }
   else { rb.classList.add('hide'); st.textContent = s.ph === 'map' ? 'Voting on the star map…' : 'Mission in progress'; }
 }
+
 // ----- star map -----
 function renderMap(s) {
   $('maph').innerHTML = '★ STAR MAP · choose the next mission · <span class="y">' + Math.ceil(s.pt) + 's</span>';
@@ -398,7 +589,7 @@ function renderMap(s) {
   const key = s.opts.map(o => o.id).join() + '|' + JSON.stringify(s.votes) + s.my;
   if (renderMap.key === key) return; renderMap.key = key;
   $('mcards').innerHTML = s.opts.map((o, i) => { const v = s.votes[o.id] || 0, M = MTYPES[o.type]; return `<div class="mc ${o.kind} ${s.my === o.id ? 'voted' : ''}" data-id="${o.id}"><canvas width="240" height="120" data-pl="${i}"></canvas><span class="${o.kind === 'main' ? 'y' : 'small'}">${o.kind === 'main' ? '★ MAIN MISSION' : '◇ SIDE MISSION'}</span> · <span class="d${o.diff}">${DIFFS[o.diff].n}</span> · Lv ${o.level}<b>${o.planet.name}</b><span class="c">${M.n}</span><br><span class="small">${M.d}${o.mod && o.mod !== 'none' ? ' · ☄ ' + o.mod : ''}</span><br><span class="small">Reward ×${DIFFS[o.diff].m}${o.diff >= 2 || o.kind === 'main' ? ' · +1 ◆ core' : ''}</span><br><span class="v">${v ? '▮'.repeat(min(v, 12)) + ' ' + v : ''}</span></div>`; }).join('');
-  $('mcards').querySelectorAll('canvas[data-pl]').forEach(c => { const o = s.opts[+c.dataset.pl], g = c.getContext('2d'); g.drawImage(neb, 0, 0, 240, 120); for (let i = 0; i < 30; i++) { g.fillStyle = '#fff'; g.fillRect((i * 97) % 240, (i * 53) % 120, 1, 1); } g.drawImage(planetCanvas(o.planet, 256), 40, -40, 200, 200); });
+  $('mcards').querySelectorAll('canvas[data-pl]').forEach(c => { const o = s.opts[+c.dataset.pl], g = c.getContext('2d'); g.drawImage(neb, 0, 0, 240, 120); for (let i = 0; i < 30; i++) { g.fillStyle = '#fff'; g.fillRect((i * 97) % 240, (i * 53) % 120, 1, 1); } g.drawImage(planetCanvas(o.planet), 40, -22, 160, 160); });
   $('mcards').querySelectorAll('.mc').forEach(d => d.onclick = () => { send({ t: 'vote', id: d.dataset.id }); SFX.ui(); });
 }
 function phaseChange(from, to, s) {
@@ -408,7 +599,6 @@ function phaseChange(from, to, s) {
   if (to === 'result' && s.res) setTimeout(() => { const r = s.res; banner((r.win ? 'MISSION COMPLETE' : 'SHIP LOST') + `<br><span style="font-size:.45em">${r.win ? `+${r.bonus} ¢ completion bonus${r.cores ? ' · +' + r.cores + ' ◆' : ''}` : 'Regroup, upgrade, try again'}</span>`, 2.6); }, 300);
   if (to === 'mission' && !$('upp').classList.contains('hide')) $('upp').classList.add('hide');
 }
-// ----- live HUD (DOM) -----
 let abKey = '';
 function hudDom(s) {
   const M = s.mi, sh = s.sh;
@@ -422,47 +612,52 @@ function hudDom(s) {
   }
   $('mi').innerHTML = s.ph === 'mission' && M ? `<b>${M.planet.name}</b> · ${MTYPES[M.type].n} · <span class="d${M.diff}">${DIFFS[M.diff].n}</span> Lv ${M.lv}<br>${obj}<br><span class="y">${me.cr} ¢</span> · <span class="c">${s.co} ◆</span> · ${MK_NAMES[s.mk]} · ship ${me.code}${me.pub ? ' (public)' : ''}`
     : `<b>${s.ph === 'map' ? 'STAR MAP' : s.ph === 'upgrade' ? 'UPGRADE BAY' : 'DEBRIEF'}</b> · <span class="y">${me.cr} ¢</span> · <span class="c">${s.co} ◆</span> · ship ${me.code}`;
-  $('crew').innerHTML = s.crew.map((c, i) => `<div class="${i === me.role ? 'me' : c[1] ? 'bot' : ''} ${sh.dn[i] ? 'dn' : ''}">${RICON[i]} ${RSHORT[i]} ${c[1] ? '🤖' : '👤'} ${c[0]}${c[4] ? ' (idle·bot)' : ''}${c[3] ? ' 🔧' : ''}${sh.dn[i] ? ' ✖ ' + PORT_NAMES[i] + ' DOWN' : ''}${c[6].length ? ' <span class="y">' + c[6].map(b => '⚡' + b).join(' ') + '</span>' : ''}</div>`).join('');
+  $('crew').innerHTML = s.crew.map((c, i) => crewLine(s, c, i)).join('');
   if (s.ph === 'map') renderMap(s);
   if (s.ph === 'upgrade' || !$('upp').classList.contains('hide')) upFoot();
+  if (isTouch) $('touch').style.visibility = (!$('upp').classList.contains('hide') || !$('rolesp').classList.contains('hide') || !$('map').classList.contains('hide')) ? 'hidden' : '';
   const inM = s.ph === 'mission' && me.role >= 0;
   $('abar').classList.toggle('hide', !inM || isTouch); $('engp').classList.toggle('hide', !(inM && me.role === ENG)); $('repp').classList.toggle('hide', !(inM && me.role === REPAIR));
   if (inM) { if (isTouch) touchLabels(s); else abilityBar(s); if (me.role === ENG) engPanel(s); if (me.role === REPAIR) repPanel(s); }
   const myB = me.role >= 0 ? s.crew[me.role][6] : []; $('buffs').innerHTML = inM && myB.length ? myB.map(b => ({ cry: '⚔ Battle Cry', reroute: '⚡ Rerouted engine power', rhalf: '⚡ Split power', stim: '💉 Stim', over: '🔥 Overcharge', ovl: '⚡ Overload' }[b] || b)).join(' · ') : '';
 }
-const HINTS = [[['Click', 'nose laser'], ['Aim', 'steer']], [['Click', 'fire turret'], ['F', 'assist']], [['Hold Fire', 'repair in band'], ['1-6 / 0', 'pick target']], [['W/S', 'throttle'], ['1·2·3·4', 'power']], [['Space', 'flip mode'], ['Aim', 'barrier']], [['Click', 'fire turret'], ['F', 'assist']]];
+// ----- live HUD pieces (v3) -----
+const HINTS = [[['Click', 'nose laser'], ['Aim', 'steer']], [['Click', 'fire turrets'], ['F', 'assist']], [['Hold Fire', 'repair in band'], ['1-6 / 0', 'pick target']], [['W/S', 'throttle'], ['1·2·3·4', 'power']], [['Aim', 'aim the arc'], ['Ship turns', 'arc stays put']], [['Click', 'fire turrets'], ['F', 'assist']]];
+function crewLine(s, c, i) { const sh = s.sh, down = []; for (let k = 0; k < 18; k++) if (sh.dn[k] && secRole(k) === i) down.push(secShort(k)); return `<div class="${i === me.role ? 'me' : c[1] ? 'bot' : ''} ${down.length ? 'dn' : ''}">${RICON[i]} ${RSHORT[i]} ${c[1] ? '🤖' : '👤'} ${c[0]}${c[4] ? ' (idle·bot)' : ''}${c[3] ? ' 🔧' : ''}${down.length ? ' ✖ ' + down.join(', ') + ' DOWN' : ''}${c[6].length ? ' <span class="y">' + c[6].map(b => '⚡' + b).join(' ') + '</span>' : ''}</div>`; }
 function abilityBar(s) {
-  const r = me.role, ab = s.crew[r][5], br = TREES[TREE_OF[r]].br, key = r + '|' + ab.map(a => a ? a[0] : '-').join();
+  const r = me.role, ab = s.crew[r][5], key = r + '|' + ab.map(a => a ? a[0] : '-').join();
   if (key !== abKey) {
-    abKey = key;
-    $('abar').innerHTML = br.map((b, i) => { const a = ab[i]; return `<div class="ab ${a ? '' : 'lock'} ${a && ABIL[a[0]].buff ? 'buff' : ''}" data-slot="${i}"><span class="k">${b.k}</span>${a ? ABIL[a[0]].n : b.n + '<br><small>locked · U</small>'}<div class="cdv"></div><div class="cdt"></div></div>`; }).join('') + HINTS[r].map(h => `<div class="ab hint"><span class="k" style="font-size:12px">${h[0]}</span>${h[1]}</div>`).join('') + (r === SHIELD ? `<div class="ab hint" id="modehint"></div>` : '');
+    abKey = key; const lbl = ['Q', 'E', 'R'];
+    $('abar').innerHTML = [0, 1, 2].map(i => { const a = ab[i]; return `<div class="ab ${a ? '' : 'lock'} ${a && ABIL[a[0]].buff ? 'buff' : ''}" data-slot="${i}" title="${a ? ABIL[a[0]].d : 'Pick an active node in the skill pyramid (U)'}"><span class="k">${lbl[i]}</span>${a ? ABIL[a[0]].n : '<br><small>locked · U</small>'}<div class="cdv"></div><div class="cdt"></div></div>`; }).join('') + HINTS[r].map(h => `<div class="ab hint"><span class="k" style="font-size:12px">${h[0]}</span>${h[1]}</div>`).join('') + (r === SHIELD ? `<div class="ab hint" id="modehint"></div>` : '');
     $('abar').querySelectorAll('[data-slot]').forEach(d => { const f = e => { e.preventDefault(); act('qer'[+d.dataset.slot]); }; d.addEventListener('mousedown', f); d.addEventListener('touchstart', f, { passive: false }); });
   }
   $('abar').querySelectorAll('[data-slot]').forEach(d => { const a = ab[+d.dataset.slot]; if (!a) return; const f = a[2] ? a[1] / a[2] : 0; d.querySelector('.cdv').style.height = (f * 100) + '%'; d.querySelector('.cdt').textContent = a[1] > 0 ? Math.ceil(a[1]) : ''; d.classList.toggle('ready', a[1] <= 0); });
-  const mh = $('modehint'); if (mh) { mh.innerHTML = `<span class="k" style="font-size:12px;color:${MODE_C[s.sh.sm]}">${MODE_N[s.sh.sm]}</span>${s.sh.sm ? 'blocks missiles+flak' : 'blocks green lasers'}`; mh.style.borderColor = MODE_C[s.sh.sm]; }
+  const mh = $('modehint'); if (mh) { const sh = s.sh, dn = sh.shd > 0 || sh.shp <= 0; mh.innerHTML = `<span class="k" style="font-size:12px;color:${dn ? '#f88' : '#7ab8ff'}">${dn ? 'DOWN ' + Math.ceil(sh.shd) + 's' : sh.arc + '° ARC'}</span>${dn ? 'recharging' : 'HP ' + sh.shp.toFixed(1) + '/' + sh.shm.toFixed(1)}`; mh.style.borderColor = dn ? '#f88' : '#7ab8ff'; }
 }
 function touchLabels(s) {
   const ab = s.crew[me.role][5];
   ['q', 'e', 'r'].forEach((k, i) => { const a = ab[i], b = $('t-' + k); const t = a ? (a[1] > 0 ? Math.ceil(a[1]) + 's' : ABIL[a[0]].n.split(' ').pop().slice(0, 7)) : '🔒'; const h = `<b>${k.toUpperCase()}</b><br><small>${t}</small>`; if (b.dataset.h !== h) { b.dataset.h = h; b.innerHTML = h; } b.style.opacity = a && a[1] <= 0 ? 1 : 0.5; });
-  $('t-alt').style.display = me.role === SHIELD ? '' : 'none';
+  $('t-alt').style.display = 'none';
 }
+function repPanel(s) {
+  const sh = s.sh, tk = sh.tk, t = tk[0];
+  let m;
+  if (sh.dn[REPAIR]) m = '<span class="r">⚠ REPAIR BAY IS DOWN.</span> Hold FIRE to self-patch it; crewmates can press F to help.';
+  else if (t < 0) m = '<span class="g">All sections nominal.</span> ' + (sh.dr.some(d => d) ? 'Drone deployed: it follows your cursor and auto-fires.' : 'Drone launching…');
+  else if (t === 18) m = `Hull at ${round(sh.h / sh.hm * 100)}%. <b>Weld the hull</b>: hold FIRE while the needle is in the green band.`;
+  else m = `${sh.dn[t] ? '<span class="r">⚠ ' + secName(t) + ' is DOWN</span>' : '<b class="y">' + secName(t) + ' damaged</b>'}. <b>Hold FIRE while the needle is inside the green band</b> to recalibrate it (~10s).`;
+  if (repPanel.m !== m) { $('repmsg').innerHTML = m; repPanel.m = m; }
+  const key = sh.dn.join('') + rtSel + t + sh.sc.map(v => v.toFixed(1)).join() + s.mk;
+  if (repPanel.k !== key) { repPanel.k = key; const ids = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17].filter(k => sh.sc[k] >= 0).concat([18]);
+    $('tgts').innerHTML = ids.map(i => { const f = i === 18 ? sh.h / sh.hm : sh.sc[i]; return `<button data-t="${i}" class="${i < 18 && sh.dn[i] ? 'dn' : ''} ${(rtSel === i || (rtSel < 0 && t === i)) ? 'sel' : ''}">${i < 6 ? i + 1 + ' ' : i === 18 ? '0 ' : ''}${i === 18 ? 'Hull' : secShort(i)} ${round(f * 100)}%</button>`; }).join('') + `<button data-t="-1" class="${rtSel < 0 ? 'sel' : ''}">AUTO priority</button>`; $('tgts').querySelectorAll('[data-t]').forEach(b => b.onclick = () => { rtSel = +b.dataset.t; repPanel.k = ''; SFX.ui(); }); }
+}
+
 function engPanel(s) {
   const sh = s.sh, N = ['ENGINES', 'WEAPONS', 'SHIELDS'], C = ['#6cf', '#f66', '#ffd54a'];
   if (!engPanel.built) { engPanel.built = 1; $('pips').innerHTML = N.map((n, k) => `<div><span style="color:${C[k]}">${n}</span><div class="bars">${'<i></i>'.repeat(4)}</div><button data-p="${k + 1}">+ (${k + 1})</button></div>`).join('') + `<div><span>RESET</span><div class="bars" style="justify-content:center;font-size:10px;color:#9ab">2·2·2</div><button data-p="4">(4)</button></div>`; $('pips').querySelectorAll('[data-p]').forEach(b => b.onclick = () => { act('p' + b.dataset.p); }); $('thr-').onclick = () => setThr(thr - 0.125); $('thr+').onclick = () => setThr(thr + 0.125); }
   $('pips').querySelectorAll('.bars').forEach((b, k) => { if (k > 2) return; b.querySelectorAll('i').forEach((i, j) => i.classList.toggle('on', j < sh.pip[k])); });
   $('thrbar').style.width = (thr * 100) + '%';
   $('thrt').innerHTML = `Throttle ${round(thr * 100)}% · speed ${sh.spd}${sh.dn[ENG] ? ' · <span class="r">ENGINES DOWN: stalling</span>' : ''}${sh.dn[PILOT] ? ' · <span class="r">cockpit down: no steering</span>' : ''}`;
-}
-function repPanel(s) {
-  const sh = s.sh, tk = sh.tk, t = tk[0];
-  let m;
-  if (sh.dn[REPAIR]) m = '<span class="r">⚠ REPAIR BAY IS DOWN.</span> Hold FIRE to self-patch it; crewmates can press F to help.';
-  else if (t < 0) m = '<span class="g">All ports nominal.</span> ' + (sh.dr.some(d => d) ? 'Drone deployed: it follows your cursor and auto-fires.' : 'Drone launching…');
-  else if (t === 6) m = `Hull at ${round(sh.h / sh.hm * 100)}%. <b>Weld the hull</b>: hold FIRE while the needle is in the green band.`;
-  else m = `${sh.dn[t] ? '<span class="r">⚠ ' + PORT_NAMES[t] + ' is DOWN</span>' : '<b class="y">' + PORT_NAMES[t] + ' damaged</b>'} (${RSHORT[t]}: ${s.crew[t][0]}). <b>Hold FIRE while the needle is inside the green band</b> to recalibrate it (~10s).`;
-  if (repPanel.m !== m) { $('repmsg').innerHTML = m; repPanel.m = m; }
-  const key = sh.dn.join() + rtSel + t + sh.st.map(v => v.toFixed(1)).join();
-  if (repPanel.k !== key) { repPanel.k = key; $('tgts').innerHTML = [0, 1, 2, 3, 4, 5, 6].map(i => `<button data-t="${i}" class="${i < 6 && sh.dn[i] ? 'dn' : ''} ${(rtSel === i || (rtSel < 0 && t === i)) ? 'sel' : ''}">${i === 6 ? '0' : i + 1} ${i === 6 ? 'Hull' : PORT_NAMES[i].replace(' Gun Turret', ' Gun')} ${i < 6 ? round(sh.st[i] / sh.mx[i] * 100) + '%' : round(sh.h / sh.hm * 100) + '%'}</button>`).join('') + `<button data-t="-1" class="${rtSel < 0 ? 'sel' : ''}">AUTO priority</button>`; $('tgts').querySelectorAll('[data-t]').forEach(b => b.onclick = () => { rtSel = +b.dataset.t; repPanel.k = ''; SFX.ui(); }); }
 }
 function drawGauge() {
   if (me.role !== REPAIR || !lastSnap || lastSnap.ph !== 'mission') return;
@@ -489,7 +684,7 @@ $('b-inv').onclick = invite; $('b-role').onclick = () => togglePanel('rolesp'); 
 $('b-mute').onclick = () => setMute(!A.muted); $('b-mus').onclick = () => setMusic(!A.music);
 
 // ---------- render ----------
-function resize() { DPR = min(devicePixelRatio || 1, isTouch ? 1.5 : 2); W = innerWidth; H = innerHeight; cv.width = W * DPR; cv.height = H * DPR; Z = clamp(min(W, H) / (isTouch ? 740 : 720) * (W > H ? 1 : 1.15), 0.45, 1.6); }
+function resize() { DPR = min(devicePixelRatio || 1, isTouch ? 1.5 : 2); W = innerWidth; H = innerHeight; cv.width = W * DPR; cv.height = H * DPR; Z = clamp(min(W, H) / (isTouch ? 900 : 1150) * (W > H ? 1 : 1.1), 0.3, 1); }
 addEventListener('resize', resize); resize();
 let lastT = performance.now(), fps = 60, bgPlanet = null;
 function frame(now) {
@@ -522,7 +717,7 @@ function hpBar(x, y, w, f, col) { cx.fillStyle = 'rgba(0,0,0,.6)'; cx.fillRect(x
 function drawWorld(o, T) {
   const s = o.s, sh = o.sh, view = (x, y, r) => abs(x - camX) < W / 2 / Z + r && abs(y - camY) < H / 2 / Z + r;
   // arena edge
-  cx.strokeStyle = 'rgba(255,80,80,.25)'; cx.lineWidth = 6; cx.setLineDash([30, 20]); cx.strokeRect(-2600, -2600, 5200, 5200); cx.setLineDash([]);
+  cx.strokeStyle = 'rgba(255,80,80,.25)'; cx.lineWidth = 6; cx.setLineDash([30, 20]); cx.strokeRect(-3200, -3200, 6400, 6400); cx.setLineDash([]);
   // escort jump point
   if (s.mi && s.mi.type === 'escort' && s.ph === 'mission') { const x = s.mi.jx, y = s.mi.jy; for (let i = 0; i < 4; i++) { cx.strokeStyle = `rgba(120,190,255,${0.5 - i * 0.1})`; cx.lineWidth = 4; cx.beginPath(); cx.arc(x, y, 50 + i * 18 + sin(T * 3 + i) * 6, T * (1 + i * 0.3), T * (1 + i * 0.3) + PI * 1.4); cx.stroke(); } cx.fillStyle = '#9cf'; cx.font = 'bold 16px monospace'; cx.textAlign = 'center'; cx.fillText('JUMP POINT', x, y - 100); }
   // pickups
@@ -543,13 +738,13 @@ function drawWorld(o, T) {
   for (const d of o.dr) if (d) { cx.drawImage(glow('#c08cff', 18), d[0] - 18, d[1] - 18); cx.save(); cx.translate(d[0], d[1]); cx.rotate(T * 3); cx.fillStyle = '#ccd'; cx.fillRect(-6, -6, 12, 12); cx.fillStyle = '#c8f'; cx.fillRect(-3, -3, 6, 6); cx.restore(); }
   if (o.sd) { cx.strokeStyle = 'rgba(120,220,255,.8)'; cx.lineWidth = 3; cx.beginPath(); cx.arc(o.sd[0], o.sd[1], 18, 0, TAU); cx.stroke(); cx.fillStyle = '#9cf'; cx.beginPath(); cx.arc(o.sd[0], o.sd[1], 6, 0, TAU); cx.fill(); }
   // beams
-  sh.bm.forEach((b, gi) => { if (!b) return; const side = gi === GUNR ? 1 : -1, la = o.a + side * PI / 3, px = o.x + cos(la) * 22, py = o.y + sin(la) * 22, ex = px + cos(b[0]) * b[1], ey = py + sin(b[0]) * b[1]; cx.lineCap = 'round'; cx.strokeStyle = 'rgba(255,40,40,.35)'; cx.lineWidth = 12 + sin(T * 40) * 3; cx.beginPath(); cx.moveTo(px, py); cx.lineTo(ex, ey); cx.stroke(); cx.strokeStyle = '#ff6060'; cx.lineWidth = 4; cx.stroke(); cx.strokeStyle = '#fff'; cx.lineWidth = 1.5; cx.stroke(); cx.lineCap = 'butt'; cx.drawImage(glow('#ff4040', 20), ex - 20, ey - 20); });
+  drawWaves(o, T); drawBeams(o, T);
   // player bolts (always red)
   for (const b of bolts.values()) { if (!view(b.x, b.y, 30)) continue; const a = atan2(b.vy, b.vx); if (b.kind === 4) { cx.drawImage(glow('#ff3030', 8), b.x - 8, b.y - 8); } else streak(b.x, b.y, a, b.kind === 2 ? 26 : b.kind === 3 ? 14 : 22, b.kind === 3 ? 1.5 : 2.2, PLAYER_RED, 12); }
-  for (const p of o.pp) { if (p[4]) { streak(p[1], p[2], p[3], 12, 2, PLAYER_RED, 12); P({ k: 0, x: p[1], y: p[2], vx: 0, vy: 0, life: 0.2, max: 0.2, s: 2, c: '#ff6050' }); } else { cx.save(); cx.translate(p[1], p[2]); cx.rotate(p[3]); cx.fillStyle = '#ccc'; cx.fillRect(-6, -2, 12, 4); cx.fillStyle = '#f33'; cx.fillRect(4, -2, 3, 4); cx.restore(); cx.drawImage(glow('#ff9a40', 12), p[1] - cos(p[3]) * 8 - 12, p[2] - sin(p[3]) * 8 - 12); P({ k: 3, x: p[1] - cos(p[3]) * 8, y: p[2] - sin(p[3]) * 8, vx: 0, vy: 0, life: 0.5, max: 0.5, s: 5, c: '#555' }); } }
+  drawPlayerShots(o);
   for (const b of s.bo) { cx.drawImage(glow('#ffaa33', 22), b[0] - 22, b[1] - 22); cx.fillStyle = '#fff'; cx.beginPath(); cx.arc(b[0], b[1], 4, 0, TAU); cx.fill(); }
   // enemy fire (all lasers neon green)
-  for (const b of o.eb) { if (!view(b[1], b[2], 30)) continue; if (b[4] === 0) streak(b[1], b[2], b[3], b[5] ? 34 : 20, b[5] ? 4 : 2.2, ENEMY_GREEN, b[5] ? 24 : 12); else if (b[4] === 1) { cx.save(); cx.translate(b[1], b[2]); cx.rotate(b[3]); cx.fillStyle = '#9aa'; cx.fillRect(-7, -2.5, 14, 5); cx.fillStyle = '#ffaa33'; cx.fillRect(5, -2.5, 3, 5); cx.restore(); cx.drawImage(glow('#ffaa33', 14), b[1] - cos(b[3]) * 9 - 14, b[2] - sin(b[3]) * 9 - 14); if (random() < 0.5) P({ k: 3, x: b[1] - cos(b[3]) * 9, y: b[2] - sin(b[3]) * 9, vx: 0, vy: 0, life: 0.5, max: 0.5, s: 4, c: '#444' }); } else { cx.drawImage(glow('#ffaa33', 12), b[1] - 12, b[2] - 12); cx.fillStyle = '#ffe0a0'; cx.beginPath(); cx.arc(b[1], b[2], 3, 0, TAU); cx.fill(); } }
+  drawEnemyFire(o, view);
   // particles
   for (const p of parts) { const f = p.life / p.max; if (!view(p.x, p.y, 120)) continue;
     if (p.k === 0) { cx.globalAlpha = f; cx.fillStyle = p.c; cx.fillRect(p.x - p.s / 2, p.y - p.s / 2, p.s, p.s); }
@@ -561,21 +756,39 @@ function drawWorld(o, T) {
   cx.globalAlpha = 1;
   for (const f of floaters) { cx.globalAlpha = min(1, f.t * 2); cx.fillStyle = f.c; cx.font = 'bold 15px monospace'; cx.textAlign = 'center'; cx.fillText(f.s, f.x, f.y); } cx.globalAlpha = 1;
   // my aim cursor (world)
-  if (joined && me.role >= 0 && s.ph === 'mission') { const [ax, ay] = aimWorld(o); cx.strokeStyle = me.role === SHIELD ? MODE_C[sh.sm] : me.role === REPAIR ? '#c8f' : '#ff5050'; cx.lineWidth = 2 / Z; cx.beginPath(); cx.arc(ax, ay, 10 / Z, 0, TAU); cx.moveTo(ax - 16 / Z, ay); cx.lineTo(ax - 6 / Z, ay); cx.moveTo(ax + 6 / Z, ay); cx.lineTo(ax + 16 / Z, ay); cx.stroke(); }
+  if (joined && me.role >= 0 && s.ph === 'mission') { const [ax, ay] = aimWorld(o); cx.strokeStyle = me.role === SHIELD ? SHIELD_BLUE : me.role === REPAIR ? '#c8f' : '#ff5050'; cx.lineWidth = 2 / Z; cx.beginPath(); cx.arc(ax, ay, 10 / Z, 0, TAU); cx.moveTo(ax - 16 / Z, ay); cx.lineTo(ax - 6 / Z, ay); cx.moveTo(ax + 6 / Z, ay); cx.lineTo(ax + 16 / Z, ay); cx.stroke(); }
 }
+// ---------- v3 world drawing ----------
+function drawWaves(o, T) {
+  for (const w of o.s.wv || []) { const half = w.half !== undefined ? w.half : w[3], x = w[0], y = w[1], a = w[2], r = w[4], hf = w[3]; cx.save(); cx.translate(x, y);
+    for (let k = 0; k < 4; k++) { const rr = r - k * 16; if (rr < 20) continue; cx.strokeStyle = `rgba(${120 + k * 30},${190 + k * 15},255,${0.85 - k * 0.2})`; cx.lineWidth = 16 - k * 3; cx.lineCap = 'round'; cx.beginPath(); cx.arc(0, 0, rr, a - hf, a + hf); cx.stroke(); }
+    cx.drawImage(glow('#6cf', 90), cos(a) * r - 90, sin(a) * r - 90, 180, 180); cx.lineCap = 'butt'; cx.restore(); }
+}
+function hullPoint(Tt, a, x, y, px, py) { const c = cos(a), s_ = sin(a); return [x + px * c - py * s_, y + px * s_ + py * c]; }
 function drawEnemy(e, T, view) {
-  const [id, t, x, y, a, hp, warp, paint, ports] = e, Tt = ETYPES[t]; if (!view(x, y, Tt.r + 60)) return;
+  const [id, t, x, y, a, hp, warp, paint, ports, shf] = e, Tt = ETYPES[t]; if (!view(x, y, Tt.r + 80)) return;
   if (warp) { cx.strokeStyle = 'rgba(160,255,170,.7)'; cx.lineWidth = 3; cx.beginPath(); cx.moveTo(x - cos(a) * 200, y - sin(a) * 200); cx.lineTo(x, y); cx.stroke(); cx.drawImage(glow('#aaffaa', 30), x - 30, y - 30); return; }
   if (t === 10) { blit(rockSprite(hp, id), x, y, a); return; }
   const sp = enemySprite(t); if (!sp) return;
-  // engine glow
-  const back = Tt.mp ? (Tt.hull.k === 'tri' ? 112 : Tt.hull.k === 'circ' ? 0 : Tt.hull.a + 4) : Tt.r * 0.6;
-  if (Tt.spd > 0) cx.drawImage(glow('#88ffaa', Tt.mp ? 26 : 10), x - cos(a) * back - (Tt.mp ? 26 : 10), y - sin(a) * back - (Tt.mp ? 26 : 10));
+  const big = Tt.mp;
+  const back = big ? (Tt.hull.k === 'tri' ? Tt.hull.a * 0.75 : Tt.hull.k === 'circ' ? 0 : (Tt.hull.a || Tt.r) + 4) : Tt.r * 0.6, gr_ = big ? 20 + Tt.sz * 6 : 10;
+  if (Tt.spd > 0) { const nB = big && Tt.sz >= 2 ? 3 : 1; for (let q = 0; q < nB; q++) { const off = (q - (nB - 1) / 2) * (Tt.r * 0.16); cx.drawImage(glow('#88ffaa', gr_), x - cos(a) * back - sin(a) * off - gr_, y - sin(a) * back + cos(a) * off - gr_, gr_ * 2, gr_ * 2); } }
   blit(sp, x, y, a);
   const ht = hitT.get(id); if (ht && performance.now() - ht < 70) { cx.globalCompositeOperation = 'lighter'; blit(sp, x, y, a, 1, 0.35); cx.globalCompositeOperation = 'source-over'; }
   if (t === 5 && (T * 4 | 0) % 2) cx.drawImage(glow('#ff3030', 12), x - 12, y - 12);
   if (ports) ports.forEach((p, k) => {
-    const P_ = Tt.ports[k], c = cos(a), s_ = sin(a), px = x + P_.x * c - P_.y * s_, py = y + P_.x * s_ + P_.y * c;
+    const P_ = Tt.ports[k], [px, py] = hullPoint(Tt, a, x, y, P_.x, P_.y);
+    if (P_.w === 'dock') { // shipping dock / hangar bay
+      const pa_ = a + (P_.f || PI);
+      if (p[0] <= 0) { cx.fillStyle = '#111'; cx.beginPath(); cx.arc(px, py, 14, 0, TAU); cx.fill(); cx.fillStyle = 'rgba(255,120,40,.7)'; cx.beginPath(); cx.arc(px, py, 5 + sin(T * 9 + k) * 2, 0, TAU); cx.fill(); cx.drawImage(glow('#ff6a20', 30), px - 30, py - 30, 60, 60); if (random() < 0.2) P({ k: 3, x: px, y: py, vx: (random() - .5) * 20, vy: (random() - .5) * 20, life: 1.2, max: 1.2, s: 8, c: '#333' }); return; }
+      cx.save(); cx.translate(px, py); cx.rotate(pa_); const open = 0.5 + 0.5 * sin(T * 1.5 + k);
+      cx.fillStyle = '#20242c'; cx.fillRect(-16, -15, 32, 30); cx.strokeStyle = '#ffd24a'; cx.lineWidth = 2; cx.strokeRect(-16, -15, 32, 30);
+      cx.fillStyle = `rgba(255,210,70,${0.25 + open * 0.4})`; cx.fillRect(-12, -11, 24, 22);
+      cx.fillStyle = '#ffd24a'; for (let q = -2; q <= 2; q++) { cx.save(); cx.translate(-14, q * 6); cx.rotate(0.6); cx.fillRect(-3, -1, 6, 2); cx.restore(); }
+      cx.restore(); cx.drawImage(glow('#ffd24a', 34), px - 34, py - 34, 68, 68);
+      cx.strokeStyle = p[0] > 0.5 ? '#5f5' : p[0] > 0.25 ? '#fd4' : '#f44'; cx.lineWidth = 3.5; cx.beginPath(); cx.arc(px, py, 22, -PI / 2, -PI / 2 + TAU * p[0]); cx.stroke();
+      if (Tt.sz >= 2 && p[0] > 0) { cx.fillStyle = '#ffd24a'; cx.font = 'bold 10px monospace'; cx.textAlign = 'center'; cx.fillText('DOCK', px, py - 28); }
+      return; }
     if (p[0] <= 0) { cx.fillStyle = '#111'; cx.beginPath(); cx.arc(px, py, 9, 0, TAU); cx.fill(); cx.fillStyle = 'rgba(255,120,40,.6)'; cx.beginPath(); cx.arc(px, py, 3 + sin(T * 9 + k) * 1.5, 0, TAU); cx.fill(); if (random() < 0.1) P({ k: 3, x: px, y: py, vx: (random() - .5) * 20, vy: (random() - .5) * 20, life: 1, max: 1, s: 5, c: '#333' }); return; }
     const pa = a + p[1], heavy = P_.w === 'ion', len = heavy ? 18 : 13;
     cx.strokeStyle = '#2a2d33'; cx.lineWidth = heavy ? 6 : 4; cx.beginPath(); cx.moveTo(px, py); cx.lineTo(px + cos(pa) * len, py + sin(pa) * len); cx.stroke();
@@ -583,55 +796,95 @@ function drawEnemy(e, T, view) {
     cx.strokeStyle = p[0] > 0.5 ? '#5f5' : p[0] > 0.25 ? '#fd4' : '#f44'; cx.lineWidth = 2.5; cx.beginPath(); cx.arc(px, py, heavy ? 13 : 10.5, -PI / 2, -PI / 2 + TAU * p[0]); cx.stroke();
     if (p[2]) cx.drawImage(glow('#39ff4a', 26), px + cos(pa) * len - 26, py + sin(pa) * len - 26);
   });
-  if (!Tt.mp && hp < 1) hpBar(x, y - Tt.r - 10, Tt.r * 2, hp, '#5f5');
+  if (shf !== undefined && shf > 0) enemyShield(x, y, Tt.r * (big ? 1.05 : 1.5), shf, T);
+  if (!big && hp < 1) hpBar(x, y - Tt.r - 10, Tt.r * 2, hp, '#5f5');
+  if (!big && shf > 0) hpBar(x, y - Tt.r - 15, Tt.r * 2, shf, '#c9a0ff');
+  if (big && shf > 0) hpBar(x, y - Tt.r - 22, min(160, Tt.r * 1.6), shf, '#c9a0ff');
   if (paint) { cx.strokeStyle = '#ff4040'; cx.lineWidth = 2; const r = Tt.r + 12; cx.save(); cx.translate(x, y); cx.rotate(T * 2); for (let i = 0; i < 4; i++) { cx.rotate(PI / 2); cx.beginPath(); cx.arc(0, 0, r, 0.2, 0.9); cx.stroke(); } cx.restore(); }
 }
 function drawShip(o, T) {
-  const sh = o.sh, x = o.x, y = o.y, a = o.a, s = o.s;
-  // shield
-  if (!sh.dn[SHIELD] && !sh.vent && s.ph === 'mission') {
-    const col = MODE_C[sh.sm], half = sh.arc * PI / 180, sa = a + o.sa;
-    if (sh.bub) { cx.strokeStyle = 'rgba(200,240,255,.8)'; cx.lineWidth = 4; cx.beginPath(); cx.arc(x, y, 66, 0, TAU); cx.stroke(); cx.fillStyle = 'rgba(150,220,255,.08)'; cx.fill(); }
-    const arcs = [[sa, half]]; if (sh.rear) arcs.push([sa + PI, half * 0.7]);
-    for (const [c, h] of arcs) { cx.strokeStyle = col; cx.globalAlpha = 0.25; cx.lineWidth = 12; cx.beginPath(); cx.arc(x, y, 66, c - h, c + h); cx.stroke(); cx.globalAlpha = 0.9; cx.lineWidth = 3; cx.beginPath(); cx.arc(x, y, 66, c - h, c + h); cx.stroke(); cx.globalAlpha = 1; }
+  const sh = o.sh, x = o.x, y = o.y, a = o.a, s = o.s, mk = s.mk, G = GEO[mk], ca = cos(a), sa_ = sin(a);
+  const L2W = (lx, ly) => [x + lx * ca - ly * sa_, y + lx * sa_ + ly * ca];
+  // shield: BLUE only, aimed in world space (turning the ship does not rotate it)
+  if (s.ph === 'mission' || s.ph === 'result') {
+    const R = G.sr, f = sh.shm ? clamp(sh.shp / sh.shm, 0, 1) : 0;
+    if (sh.shd > 0 || sh.shp <= 0) { // recharging: dotted ghost + timer
+      cx.strokeStyle = 'rgba(80,150,255,.28)'; cx.lineWidth = 2; cx.setLineDash([5, 9]); cx.beginPath(); cx.arc(x, y, R, o.sa - sh.arc * PI / 360, o.sa + sh.arc * PI / 360); cx.stroke(); cx.setLineDash([]);
+      cx.fillStyle = '#7ab8ff'; cx.font = 'bold 12px monospace'; cx.textAlign = 'center'; cx.fillText(Math.ceil(sh.shd) + 's', x + cos(o.sa) * (R + 16), y + sin(o.sa) * (R + 16) + 4);
+    } else {
+      const half = sh.arc * PI / 360;
+      if (sh.bub) { cx.strokeStyle = `rgba(150,215,255,.85)`; cx.lineWidth = 4; cx.beginPath(); cx.arc(x, y, R, 0, TAU); cx.stroke(); cx.fillStyle = 'rgba(80,160,255,.1)'; cx.fill(); }
+      const arcs = [[o.sa, half]]; if (sh.rear) arcs.push([o.sa + PI, half * 0.6]);
+      for (const [c, h] of arcs) {
+        const gr = cx.createRadialGradient(x, y, R - 20, x, y, R + 4); gr.addColorStop(0, 'rgba(60,140,255,0)'); gr.addColorStop(1, `rgba(90,170,255,${0.15 + 0.3 * f})`);
+        cx.fillStyle = gr; cx.beginPath(); cx.moveTo(x, y); cx.arc(x, y, R + 4, c - h, c + h); cx.closePath(); cx.globalAlpha = 0.8; cx.fill(); cx.globalAlpha = 1;
+        cx.lineCap = 'round'; cx.strokeStyle = '#2a7fff'; cx.globalAlpha = 0.3 + 0.25 * f; cx.lineWidth = 24; cx.beginPath(); cx.arc(x, y, R, c - h, c + h); cx.stroke(); cx.globalAlpha = 0.55 + 0.45 * f; cx.strokeStyle = '#7cc4ff'; cx.lineWidth = 7; cx.stroke(); cx.strokeStyle = '#e8f6ff'; cx.lineWidth = 2; cx.stroke(); cx.globalAlpha = 1; cx.lineCap = 'butt';
+        for (const e of [-1, 1]) cx.drawImage(glow('#6cf', 12), x + cos(c + e * h) * R - 12, y + sin(c + e * h) * R - 12, 24, 24);
+      }
+      if (sh.fort) { cx.strokeStyle = 'rgba(160,220,255,.7)'; cx.lineWidth = 2; cx.setLineDash([10, 8]); cx.beginPath(); cx.arc(x, y, R + 9, T, T + TAU); cx.stroke(); cx.setLineDash([]); }
+    }
   }
-  if (sh.aeg) { cx.strokeStyle = 'rgba(255,215,80,.7)'; cx.lineWidth = 2; cx.setLineDash([8, 6]); cx.beginPath(); cx.arc(x, y, 54, T, T + TAU); cx.stroke(); cx.setLineDash([]); }
+  if (sh.aeg) { cx.strokeStyle = 'rgba(255,215,80,.7)'; cx.lineWidth = 2; cx.setLineDash([8, 6]); cx.beginPath(); cx.arc(x, y, G.hr + 34, T, T + TAU); cx.stroke(); cx.setLineDash([]); }
   // engines
   const eg = sh.dn[ENG] ? 0.2 : clamp(sh.spd / 300, 0.2, 1.4) * (sh.burn ? 1.6 : 1);
-  for (const yy of [-13, 0, 13]) { const ex = x + cos(a) * -54 - sin(a) * yy, ey = y + sin(a) * -54 + cos(a) * yy, r = 10 + eg * 14 + random() * 3; cx.drawImage(glow(sh.burn ? '#ffd890' : '#8fd8ff', 32), ex - r, ey - r, r * 2, r * 2); if (eg > 0.4 && random() < 0.5) P({ k: 0, x: ex, y: ey, vx: -cos(a) * 200 + (random() - .5) * 40, vy: -sin(a) * 200 + (random() - .5) * 40, life: 0.25, max: 0.25, s: 2, c: '#9df' }); }
+  for (const [lx, ly] of ENGN[mk]) { const [ex, ey] = L2W(lx - 2, ly), r = (10 + mk * 3) + eg * (14 + mk * 4) + random() * 3; cx.drawImage(glow(sh.burn ? '#ffd890' : mk === 2 ? '#7fe8ff' : mk === 1 ? '#ffc070' : '#8fd8ff', 32), ex - r, ey - r, r * 2, r * 2); if (eg > 0.4 && random() < 0.5) P({ k: 0, x: ex, y: ey, vx: -ca * 200 + (random() - .5) * 40, vy: -sa_ * 200 + (random() - .5) * 40, life: 0.25, max: 0.25, s: 2, c: '#9df' }); }
   const roll = sh.roll || 0; cx.save(); cx.translate(x, y); cx.rotate(a); cx.scale(1, 1 - abs(roll) * 0.5); cx.translate(-x, -y);
-  blit(playerSprite(s.mk), x, y, 0, 0.92, sh.inv ? 0.55 : 1);
+  blit(playerSprite(mk), x, y, 0, 1, sh.inv ? 0.55 : 1);
+  // installed port hardware (drawn live)
+  for (let r = 0; r < 6; r++) for (let sl = 0; sl < mk; sl++) { const p = s.crew[r][7] && s.crew[r][7][sl]; if (!p) continue; const k = 6 + r * 2 + sl, pos = G.po[r][sl]; if (!pos) continue; const dead = sh.dn[k], pang = (sh.pa.find(q => q[0] === k) || [0, 0])[1];
+    if (dead) { cx.fillStyle = '#1b1210'; cx.beginPath(); cx.arc(x + pos[0], y + pos[1], 7, 0, TAU); cx.fill(); continue; }
+    drawPortIcon(p[0], x + pos[0], y + pos[1], r === 1 || r === 5 ? pang - a : 0, p[1], T); }
   cx.restore();
-  // turrets: starboard (right, +) and port (left, -)
-  for (const [gi, side, ta] of [[GUNR, 1, o.tr], [GUNL, -1, o.tl]]) { const la = a + side * PI / 3, px = x + cos(la) * 22, py = y + sin(la) * 22, wa = a + ta; cx.strokeStyle = '#2a2d33'; cx.lineWidth = 3; for (const off of [-2.5, 2.5]) { cx.beginPath(); cx.moveTo(px - sin(wa) * off, py + cos(wa) * off); cx.lineTo(px + cos(wa) * 17 - sin(wa) * off, py + sin(wa) * 17 + cos(wa) * off); cx.stroke(); } cx.fillStyle = sh.dn[gi] ? '#422' : '#a9afb8'; cx.beginPath(); cx.arc(px, py, 7, 0, TAU); cx.fill(); cx.strokeStyle = '#222'; cx.lineWidth = 1.2; cx.stroke(); cx.fillStyle = '#c33'; cx.fillRect(px + cos(wa) * 15 - 1.5, py + sin(wa) * 15 - 1.5, 3, 3); }
-  // damaged / destroyed ports
-  for (let i = 0; i < 6; i++) { const la = a + i * PI / 3, px = x + cos(la) * 24, py = y + sin(la) * 24; if (sh.dn[i]) { cx.drawImage(glow('#ff3020', 20), px - 20, py - 20); if (random() < 0.3) P({ k: 3, x: px, y: py, vx: (random() - .5) * 30, vy: (random() - .5) * 30, life: 1, max: 1, s: 6, c: '#333' }); if (random() < 0.15) sparks(px, py, 2, '#ffb050', 120, 0.3, 1.5); } else if (sh.st[i] < sh.mx[i]) { if (random() < 0.05) P({ k: 3, x: px, y: py, vx: 0, vy: 0, life: 0.8, max: 0.8, s: 4, c: '#555' }); } }
-  // repair target highlight for the repair player
-  if (me.role === REPAIR && sh.tk[0] >= 0 && sh.tk[0] < 6) { const la = a + sh.tk[0] * PI / 3; cx.strokeStyle = '#c8f'; cx.lineWidth = 2; cx.beginPath(); cx.arc(x + cos(la) * 24, y + sin(la) * 24, 12 + sin(T * 8) * 2, 0, TAU); cx.stroke(); }
+  // station turrets (GUNR=1 starboard, GUNL=5 port)
+  for (const [gi, ta] of [[1, o.tr], [5, o.tl]]) { const [lx, ly] = G.st[gi], [px, py] = L2W(lx, ly), wa = a + ta, sc = 1 + mk * 0.12; cx.strokeStyle = '#2a2d33'; cx.lineWidth = 3; for (const off of [-2.5 * sc, 2.5 * sc]) { cx.beginPath(); cx.moveTo(px - sin(wa) * off, py + cos(wa) * off); cx.lineTo(px + cos(wa) * 17 * sc - sin(wa) * off, py + sin(wa) * 17 * sc + cos(wa) * off); cx.stroke(); } cx.fillStyle = sh.dn[gi] ? '#422' : '#a9afb8'; cx.beginPath(); cx.arc(px, py, 7 * sc, 0, TAU); cx.fill(); cx.strokeStyle = '#222'; cx.lineWidth = 1.2; cx.stroke(); cx.fillStyle = '#c33'; cx.fillRect(px + cos(wa) * 15 * sc - 1.5, py + sin(wa) * 15 * sc - 1.5, 3, 3); }
+  // gunner port turrets (separate barrels aimed independently)
+  // damaged / destroyed sections: small fire + smoke
+  for (let k = 0; k < 18; k++) { const r = sh.sc[k]; if (r < 0) continue; const [lx, ly] = k < 6 ? G.st[k] : (G.po[(k - 6) >> 1][(k - 6) & 1] || [0, 0]), [px, py] = L2W(lx, ly);
+    if (sh.dn[k]) { const fl = 14 + sin(T * 18 + k) * 3; cx.drawImage(glow('#ff5a18', 24), px - fl, py - fl, fl * 2, fl * 2); cx.drawImage(glow('#ffd070', 12), px - 7, py - 9 - random() * 3, 14, 14); if (random() < 0.35) P({ k: 3, x: px, y: py, vx: (random() - .5) * 30, vy: (random() - .5) * 30, life: 1.2, max: 1.2, s: 6, c: '#333' }); if (random() < 0.2) sparks(px, py, 2, '#ffb050', 120, 0.3, 1.5); }
+    else if (r < 0.5 && random() < 0.06) P({ k: 3, x: px, y: py, vx: 0, vy: 0, life: 0.8, max: 0.8, s: 4, c: '#555' }); }
+  // repair target highlight
+  if (me.role === REPAIR && sh.tk[0] >= 0 && sh.tk[0] < 18) { const k = sh.tk[0], [lx, ly] = k < 6 ? G.st[k] : (G.po[(k - 6) >> 1][(k - 6) & 1] || [0, 0]), [px, py] = L2W(lx, ly); cx.strokeStyle = '#c8f'; cx.lineWidth = 2; cx.beginPath(); cx.arc(px, py, 12 + sin(T * 8) * 2, 0, TAU); cx.stroke(); }
+}
+function drawBeams(o, T) {
+  for (const b of o.sh.bm) { if (!b) continue; const px = b[1], py = b[2], ex = px + cos(b[3]) * b[4], ey = py + sin(b[3]) * b[4]; cx.lineCap = 'round'; cx.strokeStyle = 'rgba(255,40,40,.35)'; cx.lineWidth = 12 + sin(T * 40) * 3; cx.beginPath(); cx.moveTo(px, py); cx.lineTo(ex, ey); cx.stroke(); cx.strokeStyle = '#ff6060'; cx.lineWidth = 4; cx.stroke(); cx.strokeStyle = '#fff'; cx.lineWidth = 1.5; cx.stroke(); cx.lineCap = 'butt'; cx.drawImage(glow('#ff4040', 20), ex - 20, ey - 20); }
+}
+function drawEnemyFire(o, view) {
+  for (const b of o.eb) { if (!view(b[1], b[2], 30)) continue;
+    if (b[4] === 0) streak(b[1], b[2], b[3], b[5] ? 34 : 20, b[5] ? 4 : 2.2, ENEMY_GREEN, b[5] ? 24 : 12);
+    else if (b[4] === 1) { cx.save(); cx.translate(b[1], b[2]); cx.rotate(b[3]); cx.fillStyle = '#9aa'; cx.fillRect(-7, -2.5, 14, 5); cx.fillStyle = ENEMY_GREEN; cx.fillRect(5, -2.5, 3, 5); cx.restore(); cx.drawImage(glow(ENEMY_GREEN, 16), b[1] - cos(b[3]) * 9 - 16, b[2] - sin(b[3]) * 9 - 16); if (random() < 0.5) P({ k: 3, x: b[1] - cos(b[3]) * 9, y: b[2] - sin(b[3]) * 9, vx: 0, vy: 0, life: 0.5, max: 0.5, s: 4, c: '#2a4a2a' }); }
+    else { cx.drawImage(glow(ENEMY_GREEN, 14), b[1] - 14, b[2] - 14); cx.fillStyle = '#d8ffd0'; cx.beginPath(); cx.arc(b[1], b[2], 3, 0, TAU); cx.fill(); } }
+}
+function drawPlayerShots(o) {
+  for (const p of o.pp) { if (p[4]) { streak(p[1], p[2], p[3], 12, 2, PLAYER_RED, 12); P({ k: 0, x: p[1], y: p[2], vx: 0, vy: 0, life: 0.2, max: 0.2, s: 2, c: '#ff6050' }); } else { cx.save(); cx.translate(p[1], p[2]); cx.rotate(p[3]); cx.fillStyle = '#ccc'; cx.fillRect(-6, -2, 12, 4); cx.fillStyle = '#f22'; cx.fillRect(4, -2, 3, 4); cx.restore(); cx.drawImage(glow('#ff2a2a', 16), p[1] - cos(p[3]) * 8 - 16, p[2] - sin(p[3]) * 8 - 16); P({ k: 3, x: p[1] - cos(p[3]) * 8, y: p[2] - sin(p[3]) * 8, vx: 0, vy: 0, life: 0.5, max: 0.5, s: 5, c: '#633' }); } }
 }
 function drawHUD(o, T) {
   const s = o.s, sh = o.sh; if (s.ph !== 'mission') return;
-  // off-screen indicators: enemies (green), objectives (yellow)
   const ind = (x, y, col, sz) => { const dx = x - camX, dy = y - camY, hw = W / 2 / Z, hh = H / 2 / Z; if (abs(dx) < hw && abs(dy) < hh) return; const a = atan2(dy, dx), k = min((W / 2 - 24) / abs(cos(a) || 1e-6), (H / 2 - 24) / abs(sin(a) || 1e-6)); const px = W / 2 + cos(a) * k, py = H / 2 + sin(a) * k; cx.save(); cx.translate(px, py); cx.rotate(a); cx.fillStyle = col; cx.beginPath(); cx.moveTo(sz, 0); cx.lineTo(-sz * 0.6, -sz * 0.6); cx.lineTo(-sz * 0.6, sz * 0.6); cx.closePath(); cx.fill(); cx.restore(); };
   for (const e of o.e) if (e[1] !== 10) ind(e[2], e[3], ETYPES[e[1]].mp ? '#9f9' : 'rgba(57,255,74,.7)', ETYPES[e[1]].mp ? 12 : 7);
   for (const a of o.al) ind(a[2], a[3], a[1] === 'pod' ? '#7f7' : '#6cf', 10);
   if (s.mi && s.mi.type === 'escort') ind(s.mi.jx, s.mi.jy, '#9cf', 12);
   for (const p of o.pk) if (p[3]) ind(p[1], p[2], '#6df', 8);
-  // status bars
-  const bw = min(230, W * 0.32), bx = 12, by = H - (isTouch ? 210 : 70);
+  const bw = min(230, W * 0.32), bx = 12, by = H - (isTouch ? 230 : 96);
   cx.textAlign = 'left'; cx.font = 'bold 11px monospace';
   cx.fillStyle = '#cde'; cx.fillText(`HULL ${sh.h.toFixed(1)}/${sh.hm}`, bx, by - 4);
   cx.fillStyle = 'rgba(0,30,40,.7)'; cx.fillRect(bx, by, bw, 10); cx.fillStyle = sh.h / sh.hm < 0.35 ? '#f44' : '#8ff'; cx.fillRect(bx, by, bw * sh.h / sh.hm, 10);
-  cx.fillStyle = '#ffd54a'; cx.fillText(`ENERGY ${sh.en}/${sh.em}`, bx, by + 24); cx.fillStyle = 'rgba(40,40,0,.7)'; cx.fillRect(bx, by + 28, bw, 8); cx.fillStyle = '#ffd54a'; cx.fillRect(bx, by + 28, bw * sh.en / sh.em, 8);
-  cx.fillStyle = '#9ab'; cx.fillText(isTouch ? `SPD ${sh.spd} · ${sh.vent ? 'VENTED' : MODE_N[sh.sm]}` : `SPD ${sh.spd} · THR ${round(sh.thr * 100)}% · PWR E${sh.pip[0]} W${sh.pip[1]} S${sh.pip[2]} · ${sh.vent ? 'SHIELD VENTED' : 'SHIELD ' + MODE_N[sh.sm]}`, bx, by + 50);
-  // ship schematic (ports)
-  const scx = W - 70, scy = isTouch ? 300 : 120, R = 40;
-  cx.fillStyle = 'rgba(5,10,20,.6)'; cx.beginPath(); cx.arc(scx, scy, R + 16, 0, TAU); cx.fill();
-  for (let i = 0; i < 6; i++) { const ang = -PI / 2 + i * PI / 3, px = scx + cos(ang) * R, py = scy + sin(ang) * R, f = sh.st[i] / sh.mx[i]; cx.fillStyle = sh.dn[i] ? (T * 4 | 0) % 2 ? '#f33' : '#600' : f < 1 ? '#fd4' : '#4d8'; cx.beginPath(); cx.arc(px, py, i === me.role ? 9 : 7, 0, TAU); cx.fill(); if (i === me.role) { cx.strokeStyle = '#fff'; cx.lineWidth = 2; cx.stroke(); } cx.fillStyle = '#fff'; cx.font = 'bold 8px monospace'; cx.textAlign = 'center'; cx.fillText(RSHORT[i], px, py + 19); }
-  cx.fillStyle = '#9ab'; cx.font = '9px monospace'; cx.fillText('▲ NOSE', scx, scy - R - 18);
-  // critical warnings
-  const warn = []; if (sh.dn[PILOT]) warn.push('COCKPIT DOWN: ship drifting, no steering'); if (sh.dn[ENG]) warn.push('ENGINES DOWN: stalling'); if (sh.dn[SHIELD]) warn.push('DEFLECTOR DOWN'); if (sh.dead) warn.push('SHIP DESTROYED');
+  const down = sh.shd > 0 || sh.shp <= 0;
+  cx.fillStyle = down ? '#f88' : '#7ab8ff'; cx.fillText(down ? `SHIELD DOWN · ${Math.ceil(sh.shd)}s` : `SHIELD ${sh.shp.toFixed(1)}/${sh.shm.toFixed(1)} · ${sh.arc}° arc`, bx, by + 20);
+  cx.fillStyle = 'rgba(0,20,50,.7)'; cx.fillRect(bx, by + 24, bw, 10); cx.fillStyle = down ? '#a44' : '#4aa8ff'; cx.fillRect(bx, by + 24, bw * (down ? 1 - sh.shd / 20 : clamp(sh.shp / sh.shm, 0, 1)), 10);
+  cx.fillStyle = '#ffd54a'; cx.fillText(`ENERGY ${sh.en}/${sh.em}`, bx, by + 48); cx.fillStyle = 'rgba(40,40,0,.7)'; cx.fillRect(bx, by + 52, bw, 8); cx.fillStyle = '#ffd54a'; cx.fillRect(bx, by + 52, bw * sh.en / sh.em, 8);
+  cx.fillStyle = '#9ab'; cx.fillText(isTouch ? `SPD ${sh.spd}` : `SPD ${sh.spd} · THR ${round(sh.thr * 100)}% · PWR E${sh.pip[0]} W${sh.pip[1]} S${sh.pip[2]}`, bx, by + 76);
+  // ship schematic: every section, extra ports included
+  const scx = W - 74, scy = isTouch ? 300 : 124, G = GEO[s.mk], K_ = 0.6;
+  cx.fillStyle = 'rgba(5,10,20,.6)'; cx.beginPath(); cx.arc(scx, scy, 62, 0, TAU); cx.fill();
+  const kk = K_ * 100 / G.len * 1.1;
+  cx.save(); cx.translate(scx, scy); cx.rotate(-PI / 2); cx.scale(kk, kk); const sp = playerSprite(s.mk); cx.globalAlpha = 0.5; cx.drawImage(sp, -sp.hw, -sp.hh, sp.hw * 2, sp.hh * 2); cx.globalAlpha = 1; cx.restore();
+  for (let k = 0; k < 18; k++) { const r = sh.sc[k]; if (r < 0) continue; const [lx, ly] = k < 6 ? G.st[k] : (G.po[(k - 6) >> 1][(k - 6) & 1] || [0, 0]); const px = scx + ly * kk, py = scy - lx * kk, mine = secRole(k) === me.role;
+    cx.fillStyle = sh.dn[k] ? ((T * 4 | 0) % 2 ? '#f33' : '#600') : r < 1 ? '#fd4' : '#4d8'; cx.beginPath(); cx.arc(px, py, k < 6 ? 5.5 : 3.8, 0, TAU); cx.fill(); if (mine) { cx.strokeStyle = '#fff'; cx.lineWidth = 1.5; cx.stroke(); } }
+  cx.fillStyle = '#9ab'; cx.font = '9px monospace'; cx.textAlign = 'center'; cx.fillText('▲ NOSE', scx, scy - 68);
+  const warn = []; if (sh.dn[PILOT]) warn.push('COCKPIT DOWN: ship drifting, no steering'); if (sh.dn[ENG]) warn.push('ENGINES DOWN: stalling'); if (sh.dn[SHIELD]) warn.push('DEFLECTOR GENERATOR DOWN: shield offline'); if (sh.dead) warn.push('SHIP DESTROYED');
   if (warn.length) { cx.textAlign = 'center'; cx.font = 'bold 14px monospace'; cx.fillStyle = (T * 3 | 0) % 2 ? '#f55' : '#fa5'; warn.forEach((w, i) => cx.fillText('⚠ ' + w, W / 2, (isTouch ? 170 : 96) + i * 18)); }
   cx.fillStyle = '#456'; cx.font = '10px monospace'; cx.textAlign = 'right'; cx.fillText(round(fps) + 'fps', W - 6, H - 4);
 }
+
+window.TSS = { planet: planetCanvas, PK, send, get snap() { return lastSnap; }, get cur() { return cur; }, me, get camZ() { return Z; }, setZ(v) { Z = v; }, setUp(t) { upTree = t; renderUp(); } };
 })();
