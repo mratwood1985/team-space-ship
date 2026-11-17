@@ -2,7 +2,7 @@
 
 Co-op, real-time browser game. One ship, six stations (Pilot, Port/Starboard Gunners, Shields, Engineer, Repair). Bots crew every empty seat, so the public ship is always running and joinable. Desktop (mouse + keys) and phone (touch) controls.
 
-Live: https://team-space-ship.onrender.com
+Live: https://team-space-ship-git.onrender.com (deploys automatically from `main`)
 
 ## Run locally
 ```
@@ -31,3 +31,5 @@ Common: Q/E/R abilities (unlock in the skill tree, U), F assist repairs, Tab swi
 
 ## Deploy (Render, free web service)
 Build `npm install`, start `npm start`, health check `/health`. Player profiles are saved to `data/` (ephemeral on Render free).
+
+Updates: push to `main` and Render rebuilds and redeploys automatically.
