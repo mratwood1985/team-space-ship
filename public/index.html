@@ -1,0 +1,105 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<title>TEAM SPACE SHIP</title>
+<meta name="description" content="Co-op space ship: crew one ship with friends (or bots). Pilot, gunners, shields, engineer, repair.">
+<meta name="theme-color" content="#04050c">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M58 32 26 20 18 4 14 24 6 28v8l8 4 4 20 8-16z' fill='%23889' stroke='%23f33' stroke-width='3'/%3E%3C/svg%3E">
+<style>
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%;background:#04050c;color:#dfe8f0;font-family:ui-monospace,Menlo,Consolas,"Courier New",monospace;overflow:hidden;touch-action:none;user-select:none;-webkit-user-select:none}
+canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:crosshair}
+.ov{position:fixed;z-index:5}.hide{display:none!important}
+button{font:inherit;color:#e8f4ff;background:rgba(14,24,40,.8);border:1px solid #5ad;border-radius:6px;padding:6px 10px;cursor:pointer}
+button:hover{background:rgba(30,60,90,.95)}button:disabled{opacity:.35;cursor:default}
+b{color:#fff}.y{color:#ffd54a}.g{color:#6f6}.r{color:#ff5a5a}.c{color:#6df}.small{font-size:12px;color:#9ab}
+#intro{inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,rgba(10,10,40,.5),rgba(0,0,0,.88))}
+#intro .box{width:min(92vw,540px);padding:22px;border:1px solid #5ad;border-radius:14px;background:rgba(6,10,22,.9);box-shadow:0 0 30px #29f4;text-align:center}
+h1{font-size:clamp(26px,7vw,44px);letter-spacing:5px;color:#ffe9a0;text-shadow:0 0 12px #fa0,0 0 30px #f60}
+.sub{color:#9bd;margin:6px 0 16px;font-size:13px}
+input{font:inherit;background:#020610;color:#fff;border:1px solid #5ad;border-radius:6px;padding:10px;width:100%;font-size:16px;text-align:center}
+#go{margin:14px 0 8px;width:100%;font-size:22px;padding:12px;border-color:#f53;color:#fff;background:linear-gradient(90deg,#401010,#102040);box-shadow:0 0 18px #f536}
+.roles{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;margin-top:10px}.roles button{font-size:12px;padding:5px 8px}.roles button.sel{border-color:#ffd54a;color:#ffd54a}
+.priv{display:flex;gap:6px;margin-top:10px}.priv input{width:110px;padding:6px;font-size:14px;text-transform:uppercase}
+#top{top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;padding:8px;pointer-events:none;gap:8px}
+#top>*{pointer-events:auto}
+#mi{font-size:13px;line-height:1.4;max-width:48vw;text-shadow:0 0 6px #000}
+#crew{margin-top:6px;font-size:11px;line-height:1.5;color:#9bd}#crew .me{color:#ffd54a}#crew .bot{color:#789}#crew .dn{color:#f55}
+#btns{display:flex;gap:5px;flex-wrap:wrap;justify-content:flex-end;max-width:52vw}#btns button{font-size:12px;padding:5px 7px}
+#abar{left:50%;bottom:12px;transform:translateX(-50%);display:flex;gap:8px;align-items:flex-end}
+.ab{position:relative;width:78px;height:64px;border:1px solid #5ad;border-radius:9px;background:rgba(8,16,30,.82);overflow:hidden;text-align:center;font-size:10px;line-height:1.15;padding:4px 3px;cursor:pointer}
+.ab .k{display:block;font-size:17px;font-weight:bold;color:#ffd54a}.ab .cdv{position:absolute;left:0;right:0;bottom:0;background:rgba(0,0,0,.66)}.ab .cdt{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:20px;color:#fff;font-weight:bold}
+.ab.lock{opacity:.35}.ab.ready{box-shadow:0 0 10px #5ad8}.ab.buff{border-color:#ffd54a}
+.ab.hint{width:auto;min-width:64px;border-color:#456;cursor:default;font-size:10px;color:#9ab}
+#buffs{left:50%;bottom:84px;transform:translateX(-50%);font-size:12px;color:#ffd54a;text-shadow:0 0 6px #000;pointer-events:none;text-align:center}
+#engp,#repp{right:10px;bottom:90px;width:230px;padding:8px;border:1px solid #5ad;border-radius:10px;background:rgba(6,12,24,.86);font-size:11px}
+#engp h3,#repp h3{font-size:12px;color:#ffd54a;margin-bottom:4px}
+.pipc{display:flex;gap:6px}.pipc>div{flex:1;text-align:center}.pipc .bars{display:flex;flex-direction:column-reverse;gap:2px;height:52px;margin:3px 0}
+.pipc .bars i{flex:1;border:1px solid #345;border-radius:2px}.pipc .bars i.on{background:#ffd54a;box-shadow:0 0 5px #fa0}
+.pipc button,.thrb button{width:100%;padding:3px;font-size:11px}
+.thrb{display:flex;gap:4px;align-items:center;margin-top:6px}.thrb .bar{flex:1;height:10px;border:1px solid #5ad;border-radius:3px;overflow:hidden}.thrb .bar i{display:block;height:100%;background:#f84}
+#repmsg{font-size:12px;line-height:1.35;margin-bottom:5px;color:#ffd}#repmsg .r{font-weight:bold}
+#rg{width:100%;height:46px;display:block;border:1px solid #345;border-radius:6px;background:#020610}
+.tgts{display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-top:5px}.tgts button{font-size:10px;padding:3px;text-align:left}.tgts button.dn{border-color:#f55;color:#f99}.tgts button.sel{outline:1px solid #ffd54a}
+#card{left:50%;top:64px;transform:translateX(-50%);width:min(94vw,600px);padding:12px 16px;border:1px solid #ffd54a;border-radius:10px;background:rgba(12,10,2,.88);font-size:13px;line-height:1.5}
+#card h2{font-size:17px;color:#ffd54a;margin-bottom:4px}#card .x{float:right;font-size:11px;color:#aa8}
+.panel{left:50%;top:50%;transform:translate(-50%,-50%);width:min(96vw,980px);max-height:92vh;overflow:auto;padding:14px;border:1px solid #5ad;border-radius:12px;background:rgba(5,9,20,.96);box-shadow:0 0 30px #29f4}
+.panel h2{color:#fff;margin-bottom:6px;font-size:18px}
+.rgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px}.rgrid button{text-align:left;padding:10px}.rgrid button small{display:block;color:#9ab;font-size:11px}
+.cols{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin:8px 0}
+.col{border:1px solid #345;border-radius:8px;padding:6px}.col h4{font-size:13px;color:#6df;margin-bottom:4px}
+.nd{display:block;width:100%;text-align:left;margin:3px 0;padding:5px 6px;font-size:11px;line-height:1.3}.nd small{display:block;color:#9ab;font-size:10px}
+.nd.own{border-color:#6f6;background:rgba(10,40,20,.8)}.nd.act{border-left:4px solid #ffd54a}
+.row{display:flex;gap:8px;flex-wrap:wrap;margin:6px 0}.row>*{flex:1;min-width:200px}
+#upfoot{position:sticky;bottom:-14px;background:rgba(5,9,20,.98);padding:8px 0 2px;display:flex;gap:10px;align-items:center;justify-content:space-between;border-top:1px solid #345}
+#rdy{font-size:18px;padding:10px 26px;border-color:#6f6;color:#cfc}
+#map{inset:0;display:flex;align-items:center;justify-content:center;pointer-events:none}
+#map .inner{pointer-events:auto;width:min(97vw,980px);max-height:94vh;overflow:auto;padding:14px;border:1px solid #fa4;border-radius:14px;background:rgba(10,6,4,.88);box-shadow:0 0 30px #f804}
+#map h2{text-align:center;color:#ffe9a0;font-size:20px}
+#mcards{display:grid;grid-template-columns:repeat(auto-fit,minmax(170px,1fr));gap:8px;margin-top:10px}
+.mc{border:1px solid #5ad;border-radius:10px;padding:8px;cursor:pointer;background:rgba(0,14,30,.7);font-size:12px;line-height:1.4;position:relative}
+.mc:hover{background:rgba(0,30,60,.9)}.mc.main{border-color:#ffd54a;box-shadow:0 0 14px #fd04}.mc.voted{outline:2px solid #f53;box-shadow:0 0 18px #f53}
+.mc canvas{width:100%;height:84px;display:block;border-radius:6px;margin-bottom:4px;background:#000}
+.mc b{font-size:14px;display:block}.mc .v{color:#f97;font-weight:bold}
+.d0{color:#6f6}.d1{color:#6df}.d2{color:#fa4}.d3{color:#f45}
+#banner{left:0;right:0;top:36%;text-align:center;font-size:clamp(24px,6vw,46px);color:#fff;pointer-events:none;letter-spacing:3px;text-shadow:0 0 14px #f80}
+#toasts{left:50%;top:20%;transform:translateX(-50%);text-align:center;pointer-events:none;font-size:15px;width:94vw}
+#toasts div{margin:4px auto;padding:4px 10px;display:table;border-radius:6px;background:rgba(0,0,0,.6);animation:fade 3.2s forwards}
+@keyframes fade{0%{opacity:0;transform:translateY(8px)}10%{opacity:1;transform:none}80%{opacity:1}100%{opacity:0}}
+#touch{inset:0;pointer-events:none}
+#joy{position:absolute;left:14px;bottom:16px;width:140px;height:140px;border-radius:50%;border:2px solid #5ad6;background:rgba(0,30,60,.25);pointer-events:auto}
+#knob{position:absolute;left:50%;top:50%;width:56px;height:56px;margin:-28px;border-radius:50%;background:rgba(90,170,255,.35);box-shadow:0 0 14px #5ad}
+#tbtns{position:absolute;right:10px;bottom:14px;display:grid;grid-template-columns:repeat(2,60px);gap:7px;pointer-events:auto}
+#tbtns button{height:50px;border-radius:50%;font-size:11px;padding:0;touch-action:none;background:rgba(10,24,40,.5)}
+#tbtns .fire{grid-column:span 2;height:64px;border-radius:34px;border-color:#f53;font-size:16px}
+body.touch #abar{bottom:auto;top:54px;transform:translateX(-50%) scale(.8);transform-origin:top center}
+body.touch #engp,body.touch #repp{bottom:auto;top:120px;right:6px;transform:scale(.85);transform-origin:top right}
+body.touch #buffs{bottom:auto;top:116px}
+@media (max-width:700px){#mi{font-size:11px}#btns button{font-size:11px;padding:4px 5px}.cols{grid-template-columns:1fr}.ab{width:64px;height:58px}}
+</style></head><body>
+<canvas id="c"></canvas>
+<div id="intro" class="ov"><div class="box">
+<h1>TEAM SPACE SHIP</h1>
+<div class="sub">One ship. Six stations. Bots crew every empty seat, so you can jump straight in.</div>
+<input id="name" maxlength="14" placeholder="Your name (optional)" autocomplete="off">
+<div class="roles" id="prefroles"></div>
+<button id="go">LAUNCH ▶</button>
+<div class="small" id="joininfo">Joins the public ship. A bot hands its seat to you the moment you arrive.</div>
+<div class="priv"><button id="mkpriv" style="flex:1">Create private ship</button><input id="code" maxlength="6" placeholder="CODE"><button id="joincode">Join</button></div>
+<div class="small" style="margin-top:10px">Desktop: mouse + keys · Phone: touch stick + buttons · M mutes</div>
+</div></div>
+<div id="top" class="ov hide"><div><div id="mi"></div><div id="crew"></div></div>
+<div id="btns"><button id="b-inv">🔗 Invite</button><button id="b-role">⇄ Role (Tab)</button><button id="b-up">★ Upgrades (U)</button><button id="b-help">? (H)</button><button id="b-mute">🔊</button><button id="b-mus">♪</button></div></div>
+<div id="abar" class="ov hide"></div>
+<div id="buffs" class="ov"></div>
+<div id="engp" class="ov hide"><h3>⚡ POWER ROUTING (1/2/3 · 4 reset)</h3><div class="pipc" id="pips"></div><div class="thrb"><button id="thr-">− S</button><div class="bar"><i id="thrbar"></i></div><button id="thr+">W +</button></div><div class="small" id="thrt" style="margin-top:3px"></div></div>
+<div id="repp" class="ov hide"><h3>🔧 REPAIR BAY (only you see this)</h3><div id="repmsg"></div><canvas id="rg" width="460" height="92"></canvas><div class="tgts" id="tgts"></div></div>
+<div id="card" class="ov hide"></div>
+<div id="rolesp" class="ov panel hide"></div>
+<div id="upp" class="ov panel hide"></div>
+<div id="map" class="ov hide"><div class="inner"><h2 id="maph">STAR MAP</h2><div class="small" id="mapsub" style="text-align:center"></div><div id="mcards"></div></div></div>
+<div id="banner" class="ov"></div>
+<div id="toasts" class="ov"></div>
+<div id="touch" class="ov hide"><div id="joy"><div id="knob"></div></div><div id="tbtns"><button id="t-q">Q</button><button id="t-e">E</button><button id="t-r">R</button><button id="t-alt">FLIP</button><button id="t-as">ASSIST</button><button id="t-up">★</button><button id="t-f" class="fire">FIRE</button></div></div>
+<script src="defs.js"></script>
+<script src="game.js"></script>
+</body></html>

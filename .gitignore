@@ -1,0 +1,7 @@
+node_modules/
+data/
+logs/
+*.log
+.env
+PUBLIC_URL.txt
+.DS_Store
