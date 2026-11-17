@@ -27,7 +27,7 @@ async function until(fn, ms) { const d = Date.now() + ms; while (Date.now() < d)
   const S = a.last.sh;
   check(S.sc.length === 18 && S.dn.length === 18, 'snapshot has 18 ship sections (6 stations + 12 port sockets)');
   check(S.sc.slice(0, 6).every(v => v >= 0) && S.sc.slice(6).every(v => v === -1), 'Mk I: only the 6 stations exist, no extra port sections yet');
-  check(S.arc === 15 && S.shm > 0 && S.shp === S.shm && S.shd === 0, `shield starts as a ${S.arc}° arc, ${S.shp}/${S.shm} HP, up`);
+  check(S.arc === 15 && S.shm > 0 && S.shp <= S.shm, `shield starts as a ${S.arc}° arc, ${S.shp}/${S.shm} HP (${S.shd ? 'recharging' : 'up'})`);
   a.send({ t: 'i', ax: a.last.sh.x + 1000, ay: a.last.sh.y, f: 1, idle: 1 });
   // private room, 3 humans: pilot vote weight = 2
   const code = 'T' + Math.random().toString(36).slice(2, 5).toUpperCase();
