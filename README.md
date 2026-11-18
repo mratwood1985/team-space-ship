@@ -22,6 +22,17 @@ npm test           # websocket integration test against localhost:8080
 - `test/ws-test.js`: integration test (`npm test`; run the server with `DEV_TOOLS=1` to also exercise purchases, ports, Mk upgrades and spawned enemies)
 - `test/shot-v3.js`: staged headless screenshots (ship tiers, shield arc, pyramid, docks, planets); `test/shot-flow.js`: play-through screenshots incl. mobile (need Chrome + puppeteer-core)
 
+## What is new in v6 (update number 5)
+- **Repair drones**: click the map to send them to a spot (they hold it for 10 s, fire from there and grab loot nearby, max 1800 px away); right-click or G returns them to auto. Separation steering plus a hard 34 px minimum distance: they never overlap. Damage 2.6 -> 1.7 dps, speed 340 -> 255 px/s, base HP 5.
+- **Engineer**: Energy grid panel now bottom-right. Drain per slot is `2.0/s x [0,1,1.14,1.35,1.65,2.05,2.6,3.3,4.2,5.4,7.0]` (10 slots = 14/s, was 8/s). Each shield slot = +10% recharge, **+10% max shield HP, -3.5% damage taken** (10 slots: 2x HP, -35% damage).
+- **Missiles/rockets** brighter with a flickering flame (enemy green, player red). **Starboard gunner bolts red, port gunner bolts orange.**
+- **A / S / D** are the ability keys. Engineer throttle moved to Up/Down arrows + wheel. No role has a key clash.
+- **Port upgrades are per-port**: 2-4 specific options per port (e.g. twin: Heavy Slugs / Piercing / Extra Barrel; rockets: Warheads / Quick Loader / Seeker Heads; aux: Reactor Boost / Capacitors / Efficient Routing; ...), 5 levels each, cost 60 + 40 x levels bought on that port. Section HP is one option. Generic "Port effect" removed.
+- **Gunner ports: 5 options** incl. new **Sniper Turret** (2.6 s cooldown, 1900 px/s bright shot, ~3.4x turret damage, pierce) and a plain **Laser Cannon** (same as the starting cannon).
+- **Kamikaze Bomb Ship** from level 6: flashing arming ring (1.15 s), then a 3.4x dash; explodes for 3.2 hull + 1.6 HP to every section within 105 px; a shield facing it absorbs it.
+- **Missions past level 10**: new Last Stand (survival timer), Kamikaze Swarm, Twin Fortress Siege, plus extended forms of pirates, flagship, defend, escort, hostages and passengers.
+- Tests: `test/v6-test.js` (needs `DEV_TOOLS=1`), `test/botrun-v6.js` (bot soak), `test/shot-v6.js` (screenshots).
+
 ## What is new in v5 (update number 4)
 - **Engineer power rerouting**: a big panel with 4 options (Engines, Weapons, Shields, Repair), 10 levels each but only **10 slots in total**. Keys 1-4 add a slot, Shift+1-4 remove one, C clears. Each slot gives +1.5% top speed and +8% throttle response / +5% gun fire rate / +10% shield recharge speed / +3% repair speed. Ship energy (start 100) is used only for rerouting: the generator (2.0/s) covers exactly 1 slot, 2 slots drain 0.16/s net, 10 slots drain 8.0/s (generator cap is 6.0/s). Generator upgrades only lengthen how long high levels last. At 0 energy: 20 s lockout, engine thrust capped at 25%, rerouting offline, then energy is full again.
 - **Proton Bomb** is the Engineer's innate Q ability from the start: 12 s own cooldown, never uses energy; upgrades add fuses, twin bombs, radius, damage.
@@ -49,12 +60,12 @@ npm test           # websocket integration test against localhost:8080
 - **Bigger view**, 12 planet kinds drawn with lit fractal noise, a distinct hull for Mk I / II / III.
 
 ## Controls
-Common: Q/E/R abilities (picked in the skill pyramid, U), Tab switch role, H help, M mute, N music. Station destroyed? The Repair player clicks it to repair it. Repair Bay destroyed? Everybody else mashes CLICK RAPIDLY.
-- Pilot: aim to steer, click nose laser. Q Barrel Roll (built in), E/R from the pyramid (Lock-On Volley, Battle Cry, Flare Burst, Strafing Run, Rally Point)
-- Gunners: aim + click, each gunner fires their own turret and port turrets. Q Rapid Fire, then Flak Screen, Overcharge, Target Paint, Barrage, Deadeye, Suppressive Fire
-- Engineer: W/S throttle (only the engineer controls speed), 1-4 add a rerouting slot (Shift removes, C clears). Q Proton Bomb, then Afterburner, Micro-Jump, Seismic Charge, Power Surge
-- Shields: aim the arc (it stays where you point it). Q Fortify, then Barrier Bubble, Shield Lance, Energy Vent, Aegis Link, Nova Lance, Emergency Reboot
-- Repair: click a damaged port in the side panel (or 1-6 / 0 = hull) to start the automatic repair, play its minigame for a bonus, G recalls/launches the self-flying drone (recalled = +50% repair). Q Spot Weld, then Nano Swarm, Drone Overdrive, Stim Shot, Restoration, Drone Swarm, Field Medic
+Common: **A / S / D** abilities (were Q/E/R; slot 1/2/3) (picked in the skill pyramid, U), Tab switch role, H help, M mute, N music. Station destroyed? The Repair player clicks it to repair it. Repair Bay destroyed? Everybody else mashes CLICK RAPIDLY.
+- Pilot: aim to steer, click nose laser. A Barrel Roll (built in), S/D from the pyramid (Lock-On Volley, Battle Cry, Flare Burst, Strafing Run, Rally Point)
+- Gunners: aim + click, each gunner fires their own turret and port turrets. A Rapid Fire, then Flak Screen, Overcharge, Target Paint, Barrage, Deadeye, Suppressive Fire
+- Engineer: Up/Down arrows or mouse wheel = throttle (only the engineer controls speed; W/S moved so A/S/D are free), 1-4 add a rerouting slot (Shift removes, C clears). A Proton Bomb, then Afterburner, Micro-Jump, Seismic Charge, Power Surge
+- Shields: aim the arc (it stays where you point it). A Fortify, then Barrier Bubble, Shield Lance, Energy Vent, Aegis Link, Nova Lance, Emergency Reboot
+- Repair: click a damaged port in the side panel (or 1-6 / 0 = hull) to start the automatic repair, **click anywhere on the map to send the drones there** (right-click = back to auto, they never overlap), play its minigame for a bonus, G recalls/launches the self-flying drone (recalled = +50% repair). A Spot Weld, then Nano Swarm, Drone Overdrive, Stim Shot, Restoration, Drone Swarm, Field Medic
 
 ## Deploy (Render, free web service)
 Build `npm install`, start `npm start`, health check `/health`. Player profiles are saved to `data/` (ephemeral on Render free).

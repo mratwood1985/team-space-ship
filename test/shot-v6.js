@@ -79,8 +79,8 @@ const sleep = ms => new Promise(r => setTimeout(r, ms));
   await dev({ op: 'phase', ph: 'upgrade', secs: 400 }); await sleep(1200);
   await E.keyboard.press('u').catch(() => {}); await sleep(600);
   if (!await E.$eval('#upp', e => !e.classList.contains('hide'))) { await E.keyboard.press('u'); await sleep(600); }
-  await E.evaluate(() => { const h = document.querySelector('#upp .ph'); if (h) h.scrollIntoView(true); }); await sleep(300); await shot(E, '6-port-upgrade-options-engineer');
-  for (const [p, n] of [[G, 'gunner-5-port-choices'], [R, 'repair']]) { if (!await p.$eval('#upp', e => !e.classList.contains('hide'))) { await p.keyboard.press('u'); await sleep(500); } await p.evaluate(() => { const h = document.querySelector('#upp .ph'); if (h) h.scrollIntoView(true); }); await sleep(300); await shot(p, '6b-port-upgrade-options-' + n); }
+  await E.evaluate(() => { const h = [...document.querySelectorAll('#upp h4')].find(x => /Ship ports/.test(x.textContent)); if (h) h.scrollIntoView(true); }); await sleep(300); await shot(E, '6-port-upgrade-options-engineer');
+  for (const [p, n] of [[G, 'gunner-5-port-choices'], [R, 'repair']]) { if (!await p.$eval('#upp', e => !e.classList.contains('hide'))) { await p.keyboard.press('u'); await sleep(500); } await p.evaluate(() => { const h = [...document.querySelectorAll('#upp h4')].find(x => /Ship ports/.test(x.textContent)); if (h) h.scrollIntoView(true); }); await sleep(300); await shot(p, '6b-port-upgrade-options-' + n); }
   for (const p of [E, G, R]) { if (await p.$eval('#upp', e => !e.classList.contains('hide')).catch(() => false)) await p.keyboard.press('Escape'); }
 
   // 7. level 10+ missions
