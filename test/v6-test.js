@@ -39,8 +39,8 @@ const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() <
   const startMission = async (type, level) => { dev({ op: 'mission', i: 0, over: { type, level } }); await sleep(600); return until(() => E.last && E.last.ph === 'mission' && E.last.mi && E.last.mi.type === type, 6000); };
   const mi = () => E.last.mi, sh = () => E.last.sh;
   // ---- drones: click to send, never overlap ----
-  check(await startMission('pirates', 3), 'mission started');
-  await sleep(1200); dev({ op: 'clear' });
+  check(await startMission('survival', 12), 'mission started (Last Stand: a mission that does not end when the field is cleared)');
+  dev({ op: 'mset', v: { trickle: 1e9 } }); await sleep(800); dev({ op: 'clear' });
   dev({ op: 'port', r: 2, sl: 0, id: 'drone2', lv: 1 }); await sleep(600);
   dev({ op: 'ship', v: { inv: 999, x: 0, y: 0, swarm: 90, shp: 3 } }); dev({ op: 'clear' });
   check(await until(() => sh().dr.filter(d => d).length >= 4, 8000), `several drones out (${sh().dr.filter(d => d).length})`);
@@ -52,7 +52,6 @@ const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() <
   check(await until(() => sh().dg && Math.abs(sh().dg[0] - tx) < 3 && Math.abs(sh().dg[1] - ty) < 3, 2000), `click sends the drones: marker at (${sh().dg && sh().dg[0]},${sh().dg && sh().dg[1]})`);
   await sleep(4500); md = 1e9; let near = 0; for (let i = 0; i < 20; i++) { md = Math.min(md, minDist()); await sleep(100); }
   const dd = sh().dr.filter(x => x); near = dd.filter(d => Math.hypot(d[0] - tx, d[1] - ty) < 160).length;
-  console.log('DBG', tx, ty, JSON.stringify(sh().dg), JSON.stringify(dd.map(d => [d[0] | 0, d[1] | 0])), sh().x | 0, sh().y | 0);
   check(near >= dd.length - 1 && dd.length >= 4, `drones fly to the clicked spot and hold it (${near}/${dd.length} within 160 px)`);
   check(md >= 28, `at the spot they stay spread out (closest pair ${md.toFixed(1)} px, min is 34 px)`);
   inp(E, { dm: [0, 0] }); await sleep(300); check(sh().dg && Math.abs(sh().dg[0] - tx) < 3, 'only the repair seat can send drones');
@@ -75,8 +74,8 @@ const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() <
   for (let i = 0; i < 6; i++) await buy('dmg'); check(port()[2].dmg === D.PORT_UPS['engineer.mines'][0].max, `each option stops at its max level (${port()[2].dmg}/${D.PORT_UPS['engineer.mines'][0].max})`);
   // ---- bolt colours, sniper + laser ports ----
   dev({ op: 'port', r: 5, sl: 0, id: 'sniper', lv: 0 }); dev({ op: 'port', r: 5, sl: 1, id: 'laser', lv: 0 }); dev({ op: 'port', r: 1, sl: 0, id: 'rockets', lv: 0 });
-  check(await startMission('pirates', 4), 'mission 2 started');
-  await sleep(500); dev({ op: 'ship', v: { inv: 999, x: 0, y: 0 } }); E.evs.length = 0;
+  check(await startMission('survival', 12), 'mission 2 started'); dev({ op: 'mset', v: { trickle: 1e9 } });
+  await sleep(500); dev({ op: 'clear' }); dev({ op: 'ship', v: { inv: 999, x: 0, y: 0 } }); E.evs.length = 0;
   for (let i = 0; i < 3; i++) dev({ op: 'spawn', type: 2, a: -0.6 + i * 1.3, d: 520, L: 3, static: 1 });
   await sleep(14000);
   const bs = E.evs.filter(e => e[0] === 'b'), kinds = {}; for (const b of bs) kinds[b[6]] = (kinds[b[6]] || 0) + 1;
@@ -109,7 +108,7 @@ const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() <
   check(E.last.e.filter(e => e[1] === 9).length === 2, 'siege: two fortress stations');
   E.evs.length = 0; dev({ op: 'clear' }); check(await until(() => E.evs.some(e => e[0] === 'win'), 5000), 'destroying both fortresses wins');
   await sleep(500); dev({ op: 'phase', ph: 'map' }); await sleep(300);
-  check(await startMission('pirates', 12), 'pirates L12 started'); check(mi().ext === true && mi().waves >= 5, `extended pirates: ${mi().waves} waves at level 12 (ext)`);
+  check(await startMission('pirates', 12), 'pirates L12 started'); check(mi().ext === 1 && mi().waves >= 5, `extended pirates: ${mi().waves} waves at level 12 (ext)`);
   clearInterval(tick); E.ws.close(); R.ws.close();
   console.log(ok ? 'V6 TESTS PASSED' : 'V6 TESTS FAILED'); process.exit(ok ? 0 : 1);
 })().catch(e => { console.error(e); process.exit(2); });
