@@ -1177,5 +1177,5 @@ function drawHUD(o, T) {
   cx.fillStyle = '#456'; cx.font = '10px monospace'; cx.textAlign = 'right'; cx.fillText(round(fps) + 'fps', W - 6, H - 4);
 }
 
-window.TSS = { worldToScreen(x, y) { return [(x - camX) * Z + W / 2, (y - camY) * Z + H / 2]; }, planet: planetCanvas, PK, send, get snap() { return lastSnap; }, get cur() { return cur; }, me, get camZ() { return Z; }, setZ(v) { Z = v; }, setUp(t) { upTree = t; renderUp(); } };
+window.TSS = { worldToScreen(x, y) { return [(x - camX) * Z + W / 2, (y - camY) * Z + H / 2]; }, planet: planetCanvas, PK, send, get snap() { return lastSnap; }, get bolts() { return bolts; }, get cur() { return cur; }, me, get camZ() { return Z; }, setZ(v) { Z = v; }, setUp(t) { upTree = t; renderUp(); } };
 })();

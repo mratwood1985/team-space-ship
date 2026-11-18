@@ -1143,9 +1143,10 @@ function devOp(R, c, m) {
   if (m.op === 'setmk') { R.mk = clamp(m.mk | 0, 0, 2); R.resetShip(); for (let r = 0; r < 6; r++) for (let sl = 0; sl < R.mk; sl++) if (!R.ports[r][sl]) R.ports[r][sl] = { id: TREES[TREE_OF[r]].ports[(r + sl) % 3][0], lv: sl + 1, u: {} }; c.dirty = 1; }
   else if (m.op === 'port') { const r = m.r | 0, sl = m.sl | 0; R.ports[r][sl] = { id: String(m.id), lv: m.lv | 0, u: m.u || {} }; if (R.mk <= sl) R.mk = sl + 1; R.resetShip(); c.dirty = 1; }   // v6 dev: install a port directly
   else if (m.op === 'mset') { if (R.mission) Object.assign(R.mission, m.v || {}); }   // v6 dev: tweak the running mission (e.g. fast-forward its timer)
+  else if (m.op === 'noport') { R.ports[m.r | 0][m.sl | 0] = null; R.resetShip(); }   // v6 dev: empty a port slot
   else if (m.op === 'give') { c.prof.cr += m.cr | 0; R.cores += m.cores | 0; c.dirty = 1; }
   else if (m.op === 'phase') { R.phase = m.ph; R.phaseT = m.secs || 40; if (m.ph === 'upgrade') R.result = R.result || { win: 1, bonus: 30, cores: 1, name: 'Test', type: 'pirates' }; c.dirty = 1; }
-  else if (m.op === 'spawn') { const a = +m.a || 0, d = +m.d || 700; const e = R.addEnemy(m.type | 0, s.x + cos(a) * d, s.y + sin(a) * d, m.L || 8, 'dom', true); e.a = a + PI; if (m.static) e.cd = 1e9; }
+  else if (m.op === 'spawn') { const a = +m.a || 0, d = +m.d || 700; const e = R.addEnemy(m.type | 0, s.x + cos(a) * d, s.y + sin(a) * d, m.L || 8, 'dom', true); e.a = a + PI; if (m.static) e.cd = 1e9; if (m.hpx) { e.hp *= m.hpx; e.mhp *= m.hpx; } }
   else if (m.op === 'clear') { R.enemies = []; R.eb = []; }
   else if (m.op === 'mission') { R.startMission(Object.assign({}, R.options[m.i | 0 || 0], m.over || {})); }
   else if (m.op === 'ship') { Object.assign(s, m.v || {}); }
