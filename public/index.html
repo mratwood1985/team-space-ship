@@ -31,15 +31,37 @@ input{font:inherit;background:#020610;color:#fff;border:1px solid #5ad;border-ra
 .ab.lock{opacity:.35}.ab.ready{box-shadow:0 0 10px #5ad8}.ab.buff{border-color:#ffd54a}
 .ab.hint{width:auto;min-width:64px;border-color:#456;cursor:default;font-size:10px;color:#9ab}
 #buffs{left:50%;bottom:84px;transform:translateX(-50%);font-size:12px;color:#ffd54a;text-shadow:0 0 6px #000;pointer-events:none;text-align:center}
-#engp,#repp{right:10px;bottom:90px;width:230px;padding:8px;border:1px solid #5ad;border-radius:10px;background:rgba(6,12,24,.86);font-size:11px}
-#engp h3,#repp h3{font-size:12px;color:#ffd54a;margin-bottom:4px}
+#engp{right:10px;bottom:90px;width:230px;padding:8px;border:1px solid #5ad;border-radius:10px;background:rgba(6,12,24,.86);font-size:11px}
+#engp h3{font-size:12px;color:#ffd54a;margin-bottom:4px}
 .pipc{display:flex;gap:6px}.pipc>div{flex:1;text-align:center}.pipc .bars{display:flex;flex-direction:column-reverse;gap:2px;height:52px;margin:3px 0}
 .pipc .bars i{flex:1;border:1px solid #345;border-radius:2px}.pipc .bars i.on{background:#ffd54a;box-shadow:0 0 5px #fa0}
 .pipc button,.thrb button{width:100%;padding:3px;font-size:11px}
 .thrb{display:flex;gap:4px;align-items:center;margin-top:6px}.thrb .bar{flex:1;height:10px;border:1px solid #5ad;border-radius:3px;overflow:hidden}.thrb .bar i{display:block;height:100%;background:#f84}
-#repmsg{font-size:12px;line-height:1.35;margin-bottom:5px;color:#ffd}#repmsg .r{font-weight:bold}
-#rg{width:100%;height:46px;display:block;border:1px solid #345;border-radius:6px;background:#020610}
-.tgts{display:grid;grid-template-columns:1fr 1fr;gap:3px;margin-top:5px}.tgts button{font-size:10px;padding:3px;text-align:left}.tgts button.dn{border-color:#f55;color:#f99}.tgts button.sel{outline:1px solid #ffd54a}
+
+#repp{right:8px;bottom:auto;top:196px;width:min(392px,92vw);max-height:calc(100vh - 206px);overflow-y:auto;padding:9px;border:1px solid #5ad;border-radius:10px;background:linear-gradient(180deg,rgba(10,18,34,.93),rgba(4,9,20,.93));box-shadow:0 0 18px #27f3,inset 0 0 0 1px #123}
+#repp h3{font-size:13px;color:#ffd54a;margin-bottom:5px;letter-spacing:.06em}
+#hullrow,.hr{display:grid;grid-template-columns:132px 1fr 44px;gap:5px;align-items:center;padding:2px 4px;border-radius:5px;cursor:pointer;font-size:11px;position:relative}
+#hullrow{margin-bottom:4px;font-size:12px;border:1px solid #345;background:#08111e;grid-template-columns:78px 1fr 88px;white-space:nowrap}
+#hullrow.dmg:hover,.hr.dmg:hover{background:#17304f}
+#hullrow.sel,.hr.sel{outline:2px solid #ffd54a}#hullrow.act,.hr.act{background:#14381e;outline:2px solid #5f8;animation:pulse 1s infinite}
+.hb{height:11px;border:1px solid #456;border-radius:3px;background:#050b14;overflow:hidden;box-shadow:inset 0 1px 2px #000}.hb i{display:block;height:100%;background:linear-gradient(180deg,rgba(255,255,255,.28),rgba(0,0,0,.15)),#5f8;transition:width .2s}
+.hn{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.hr b{text-align:right;font-size:11px}.hr.dn b,.hr.dn .hn{color:#f66}.hr.lock{opacity:.55;cursor:not-allowed}
+.hr em{position:absolute;right:50px;top:50%;transform:translateY(-50%);font-style:normal;font-size:9px;color:#ffd54a;text-shadow:0 0 3px #000;pointer-events:none}
+.hr:not(.dmg) .hn{color:#8ab}
+#hlist{max-height:178px;overflow-y:auto;margin-bottom:6px;display:flex;flex-direction:column;gap:1px}
+#repmsg{font-size:12px;line-height:1.35;margin-bottom:5px;color:#ffd;min-height:34px}#repmsg .r{font-weight:bold;color:#f66}
+#mgw{border:1px solid #345;border-radius:6px;background:#020610;overflow:hidden}#mgh{font-size:10px;color:#9ab;padding:2px 5px;background:#08111e;min-height:15px}
+#rg{width:100%;display:block;touch-action:none;cursor:crosshair;image-rendering:auto}
+#drnb{width:100%;margin-top:6px;padding:7px;font-size:12px;text-align:left;border:2px solid #5ad;background:#0b1a2e;color:#cfe}#drnb small{display:block;font-size:10px;color:#9ab;margin-top:2px}#drnb.off{border-color:#6f6;background:#0f2a18}#drnb:disabled{border-color:#733;color:#a77;cursor:not-allowed}
+#rapid{right:10px;top:196px;width:min(300px,92vw);padding:12px;border:3px solid #f33;border-radius:12px;background:rgba(40,4,6,.9);text-align:center;box-shadow:0 0 28px #f336;animation:redpulse .8s infinite}
+#rapt{font-size:17px;font-weight:bold;color:#ff5a5a;letter-spacing:.04em}#rapx{font-size:12px;margin:5px 0 8px;color:#fcc;line-height:1.35}
+#rapb{width:100%;height:150px;font-size:30px;font-weight:900;letter-spacing:.04em;color:#fff;border:4px solid #ff8;border-radius:14px;background:radial-gradient(circle at 50% 35%,#ff6a3a,#b40f10 70%);box-shadow:0 6px 0 #600,0 0 24px #f55a;cursor:pointer;user-select:none;touch-action:manipulation;line-height:1.05}
+#rapb.hit,#rapb:active{transform:translateY(5px);box-shadow:0 1px 0 #600,0 0 34px #ff8}
+#rapbar{height:14px;border:1px solid #f88;border-radius:4px;margin-top:9px;background:#200;overflow:hidden}#rapbar i{display:block;height:100%;background:linear-gradient(90deg,#f84,#6f6);width:0}
+#rapp{font-size:12px;margin-top:3px;color:#fff}#raps{font-size:12px}#raphint{font-size:11px;color:#fbb;margin-top:5px;line-height:1.3}
+@keyframes redpulse{50%{border-color:#ff9;box-shadow:0 0 40px #f66a}}@keyframes pulse{50%{background:#1d5a2e}}
+body.touch #repp{top:120px;right:4px;transform:scale(.8);transform-origin:top right}body.touch #rapid{top:120px;right:4px;width:230px}body.touch #rapb{height:120px;font-size:24px}
+.fxs{display:block;margin-top:3px}.fxl{display:block;font-size:11px;color:#cfe;line-height:1.3}.fxl u{text-decoration:none;color:#ffd54a}.fxe{display:block;font-size:10px;color:#8ab}
 #card{left:50%;top:64px;transform:translateX(-50%);width:min(94vw,600px);padding:12px 16px;border:1px solid #ffd54a;border-radius:10px;background:rgba(12,10,2,.88);font-size:13px;line-height:1.5}
 #card h2{font-size:17px;color:#ffd54a;margin-bottom:4px}#card .x{float:right;font-size:11px;color:#aa8}
 .panel{left:50%;top:50%;transform:translate(-50%,-50%);width:min(98vw,1180px);max-height:92vh;overflow:auto;padding:14px;border:1px solid #5ad;border-radius:12px;background:rgba(5,9,20,.96);box-shadow:0 0 30px #29f4}
@@ -72,12 +94,12 @@ input{font:inherit;background:#020610;color:#fff;border:1px solid #5ad;border-ra
 #tbtns button{height:50px;border-radius:50%;font-size:11px;padding:0;touch-action:none;background:rgba(10,24,40,.5)}
 #tbtns .fire{grid-column:span 2;height:64px;border-radius:34px;border-color:#f53;font-size:16px}
 body.touch #abar{bottom:auto;top:54px;transform:translateX(-50%) scale(.8);transform-origin:top center}
-body.touch #engp,body.touch #repp{bottom:auto;top:120px;right:6px;transform:scale(.85);transform-origin:top right}
+body.touch #engp{bottom:auto;top:120px;right:6px;transform:scale(.85);transform-origin:top right}
 body.touch #buffs{bottom:auto;top:116px}
 @media (max-width:700px){#mi{font-size:11px}#btns button{font-size:11px;padding:4px 5px}.cols{grid-template-columns:1fr}.ab{width:64px;height:58px}}
 
 .pyr{display:grid;grid-template-columns:repeat(12,1fr);gap:5px;margin:8px auto;max-width:1100px;align-items:stretch}
-.pn{display:block;text-align:left;padding:5px 6px;font-size:11px;line-height:1.25;min-height:84px;border-color:#345;background:rgba(10,18,32,.8)}
+.pn{display:block;text-align:left;padding:5px 6px;font-size:11px;line-height:1.25;min-height:104px;border-color:#345;background:rgba(10,18,32,.8)}
 .pn small{display:block;color:#9ab;font-size:10px;margin:2px 0}.pn i{display:block;font-style:normal;font-size:10px;color:#6df;margin-top:3px}
 .pn.ok{border-color:#ffd54a;box-shadow:0 0 10px #fd4a;background:rgba(40,36,10,.85)}.pn.ok i{color:#ffd54a}
 .pn.own{border-color:#6f6;background:rgba(10,50,24,.9)}.pn.own i{color:#6f6}
@@ -87,7 +109,7 @@ body.touch #buffs{bottom:auto;top:116px}
 .ph{color:#6df;margin:10px 0 2px;font-size:13px}.ph .small{font-weight:normal}
 .mkrow{display:flex;gap:10px;align-items:center;margin:8px 0;border:1px solid #345;border-radius:8px;padding:6px;flex-wrap:wrap}.mkrow canvas{background:#050a14;border-radius:6px;max-width:100%}.mkrow>div{flex:1;min-width:200px}
 .nd.warn{border-color:#f55;color:#ffb0b0;background:rgba(60,10,10,.85)}
-@media (max-width:700px){.pyr{grid-template-columns:repeat(12,1fr)}.pn{font-size:9px;padding:3px;min-height:64px}.pn small{display:none}}
+@media (max-width:700px){.pyr{grid-template-columns:repeat(12,1fr)}.pn{font-size:9px;padding:3px;min-height:64px}.pn small .fxe{display:none}.pn small .fxl{font-size:9px}}
 </style></head><body>
 <canvas id="c"></canvas>
 <div id="intro" class="ov"><div class="box">
@@ -105,14 +127,19 @@ body.touch #buffs{bottom:auto;top:116px}
 <div id="abar" class="ov hide"></div>
 <div id="buffs" class="ov"></div>
 <div id="engp" class="ov hide"><h3>⚡ POWER ROUTING (1/2/3 · 4 reset)</h3><div class="pipc" id="pips"></div><div class="thrb"><button id="thr-">− S</button><div class="bar"><i id="thrbar"></i></div><button id="thr+">W +</button></div><div class="small" id="thrt" style="margin-top:3px"></div></div>
-<div id="repp" class="ov hide"><h3>🔧 REPAIR BAY (only you see this)</h3><div id="repmsg"></div><canvas id="rg" width="460" height="92"></canvas><div class="tgts" id="tgts"></div></div>
+<div id="repp" class="ov hide"><h3>🔧 REPAIR BAY · ship status</h3>
+<div id="hullrow"><span class="hn">SHIP HULL</span><div class="hb"><i id="hbi"></i></div><b id="hbt"></b></div>
+<div id="repmsg"></div><div id="hlist"></div>
+<div id="mgw"><div id="mgh"></div><canvas id="rg" width="360" height="170"></canvas></div>
+<button id="drnb"></button></div>
+<div id="rapid" class="ov hide"><div id="rapt">⚠ REPAIR BAY DESTROYED!</div><div id="rapx">It is the only port that repairs the ship. <b>Repair it IMMEDIATELY!</b></div><button id="rapb">CLICK RAPIDLY</button><div id="rapbar"><i id="rapf"></i></div><div id="rapp"></div><div id="raps"></div><div id="raphint"></div></div>
 <div id="card" class="ov hide"></div>
 <div id="rolesp" class="ov panel hide"></div>
 <div id="upp" class="ov panel hide"></div>
 <div id="map" class="ov hide"><div class="inner"><h2 id="maph">STAR MAP</h2><div class="small" id="mapsub" style="text-align:center"></div><div id="mcards"></div></div></div>
 <div id="banner" class="ov"></div>
 <div id="toasts" class="ov"></div>
-<div id="touch" class="ov hide"><div id="joy"><div id="knob"></div></div><div id="tbtns"><button id="t-q">Q</button><button id="t-e">E</button><button id="t-r">R</button><button id="t-alt" style="display:none">·</button><button id="t-as">ASSIST</button><button id="t-up">★</button><button id="t-f" class="fire">FIRE</button></div></div>
+<div id="touch" class="ov hide"><div id="joy"><div id="knob"></div></div><div id="tbtns"><button id="t-q">Q</button><button id="t-e">E</button><button id="t-r">R</button><button id="t-alt" style="display:none">·</button><button id="t-as" style="display:none">·</button><button id="t-up">★</button><button id="t-f" class="fire">FIRE</button></div></div>
 <script src="defs.js"></script>
 <script src="game.js"></script>
 </body></html>

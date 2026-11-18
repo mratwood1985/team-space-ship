@@ -2,11 +2,11 @@
 (() => {
 const $ = id => document.getElementById(id);
 const cv = $('c'), cx = cv.getContext('2d');
-const { sin, cos, atan2, hypot, min, max, abs, PI, random, floor, round, sqrt } = Math;
+const { sin, cos, atan2, hypot, min, max, abs, PI, random, floor, round, sqrt, exp } = Math;
 const TAU = PI * 2, clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const wrap = a => { while (a > PI) a -= TAU; while (a < -PI) a += TAU; return a; };
 const lerp = (a, b, t) => a + (b - a) * t, lerpA = (a, b, t) => a + wrap(b - a) * t;
-const D = window.DEFS, { ROLES, RNAME, RSHORT, PORT_NAMES, TREE_OF, TREES, ABIL, NODE_COST, infCost, infCap, ETYPES, DIFFS, MTYPES, MK_COST, MK_NAMES, PORT_COST, portUpCost, PORT_MAX_LV, CORE_RATE, pyrAllowed, SHIELD_ARC_MAX } = D;
+const D = window.DEFS, { ROLES, RNAME, RSHORT, PORT_NAMES, TREE_OF, TREES, ABIL, NODE_COST, infCost, infCap, ETYPES, DIFFS, MTYPES, MK_COST, MK_NAMES, PORT_COST, portUpCost, PORT_MAX_LV, CORE_RATE, pyrAllowed, SHIELD_ARC_MAX, ARENA, EFIRE_WEAK_LV, EFIRE_WEAK } = D;
 const PILOT = 0, GUNR = 1, REPAIR = 2, ENG = 3, SHIELD = 4, GUNL = 5;
 const RICON = ['✈', '⟫', '✚', '⚙', '◐', '⟪'];
 const PLAYER_RED = '#ff3030', ENEMY_GREEN = '#39ff4a';
@@ -16,11 +16,11 @@ if (isTouch) document.body.classList.add('touch');
 const ROLE_HELP = [
   'Steer by aiming (mouse/stick). Click = nose laser. You <b>cannot</b> change speed: that is the Engineer. If the Cockpit is destroyed the ship drifts straight ahead until it is repaired. Your vote counts extra on the star map.',
   'Aim + hold click to fire your starboard (right) turret. Your red bolts shoot down missiles and flak. If the port turret is destroyed you get a full 360° arc.',
-  'Hold FIRE while the needle is inside the green band to repair the port named in your panel (~10 s). Pick a target with 1-6 (0 = hull) or tap it. When every port is at full health your drone launches automatically and follows your cursor.',
+  '<b>Click a damaged port</b> in your big side panel (or press 1-6, 0 = hull) to start repairing it: it then repairs <b>automatically</b>, and the port\'s own <b>minigame</b> makes it faster (up to +100%). Your drone is out by default and follows your cursor; <b>disable it (G)</b> to repair 50% faster. You cannot repair the Repair Bay; if it is destroyed your crewmates must click it back online, and until then you can neither repair nor use the drone.',
   'You alone control speed: W/S or wheel = throttle. 1/2/3 route a power pip to Engines/Weapons/Shields (4 = balanced). Engines destroyed = the ship slowly stalls until repaired.',
   'Aim to place the blue shield arc: it stays where you point it even when the ship turns. It blocks ALL enemy fire until its HP is gone, then it needs 20 s to recharge. Buy HP and arc width (starts 15°, max 90°) in the upgrades; the Lance abilities fire the shield as a weapon.',
   'Aim + hold click to fire your port (left) turret. Your red bolts shoot down missiles and flak. If the starboard turret is destroyed you get a full 360° arc.'];
-const COMMON = 'Your station destroyed? <b>Hold FIRE to self-patch</b>. <b>F</b> = lend a hand to repairs. <b>Q/E/R</b> = your abilities (pick them in the skill pyramid, U). <b>Tab</b> switch role · <b>H</b> help.';
+const COMMON = 'Your station destroyed? Ask the Repair crew to click it. <b>If the Repair Bay is destroyed, everybody mashes CLICK RAPIDLY</b> to fix it. <b>Q/E/R</b> = your abilities (pick them in the skill pyramid, U). <b>Tab</b> switch role · <b>H</b> help.';
 
 // ---------- state ----------
 let ws = null, me = { role: -1, cr: 0, tr: null, code: '', pid: 0 }, snaps = [], offset = null, lastSnap = null, cur = null;
@@ -124,6 +124,8 @@ function explosion(x, y, sz, r) {
   sparks(x, y, n / 2, '#fff', 150 + sz * 60, 0.4, 1.5);
   for (let i = 0; i < 2 + sz * 2; i++) { const a = random() * TAU, v = 40 + random() * 80; P({ k: 3, x, y, vx: cos(a) * v, vy: sin(a) * v, life: 0.9 + random() * 0.9, max: 1.8, s: 10 + sz * 7, c: '#332a28' }); }
   for (let i = 0; i < 1 + sz * 2; i++) { const a = random() * TAU, v = 120 + random() * 220; P({ k: 4, x, y, vx: cos(a) * v, vy: sin(a) * v, a: random() * TAU, va: (random() - .5) * 20, life: 1, max: 1, s: 3 + sz * 2, c: '#8a8f99' }); }
+  ring(x, y, 2, R * 3 + 40, 0.5 + sz * 0.1, 'rgba(255,255,255,.6)', 1.5);
+  for (let i = 0; i < 6 + sz * 4; i++) { const a = random() * TAU, v = 260 + random() * (240 + sz * 100); P({ k: 6, x, y, vx: cos(a) * v, vy: sin(a) * v, life: 0.35 + random() * 0.35, max: 0.7, s: 1.5 + random() * (1 + sz * 0.4), c: random() < 0.5 ? '#ffe9a0' : '#ff8a3a' }); }
   const d = hypot(x - camX, y - camY); if (d < 900) shake = max(shake, (sz * 4 + 2) * (1 - d / 900));
   SFX.boom(min(sz, 4), x);
 }
@@ -134,7 +136,26 @@ function stepParts(dt) {
 // ---------- sprites (pre-rendered vector art) ----------
 const SPR = {}, SS = 2;
 function rng(seed) { let a = seed >>> 0; return () => { a |= 0; a = a + 0x6D2B79F5 | 0; let t = Math.imul(a ^ a >>> 15, 1 | a); t = t + Math.imul(t ^ t >>> 7, 61 | t) ^ t; return ((t ^ t >>> 14) >>> 0) / 4294967296; }; }
-function spr(key, w, h, fn) { let c = SPR[key]; if (c) return c; c = SPR[key] = document.createElement('canvas'); c.width = w * SS; c.height = h * SS; const g = c.getContext('2d'); g.scale(SS, SS); g.translate(w / 2, h / 2); g.lineJoin = 'round'; fn(g, rng(key.length * 7919 + key.charCodeAt(0) * 31)); c.hw = w / 2; c.hh = h / 2; return c; }
+// v4: extra detail pass over every pre-rendered sprite: light/shade gradient, edge darkening, panel seams, rivets, running lights (only paints where the sprite already has pixels)
+function sprDetail(g, w, h, R, key) {
+  const rock = key.startsWith('rock'), big = max(w, h);
+  g.save(); g.globalCompositeOperation = 'source-atop';
+  const lg = g.createLinearGradient(-w / 2, -h / 2, w / 2, h / 2); lg.addColorStop(0, 'rgba(255,255,255,.17)'); lg.addColorStop(0.45, 'rgba(255,255,255,0)'); lg.addColorStop(1, 'rgba(0,0,24,.32)'); g.fillStyle = lg; g.fillRect(-w / 2, -h / 2, w, h);
+  const rg = g.createRadialGradient(0, 0, big * 0.18, 0, 0, big * 0.62); rg.addColorStop(0, 'rgba(0,0,0,0)'); rg.addColorStop(1, 'rgba(0,0,10,.3)'); g.fillStyle = rg; g.fillRect(-w / 2, -h / 2, w, h);
+  const n = rock ? 6 : clamp(floor(big / 9), 4, 22);
+  for (let i = 0; i < n; i++) {   // panel seams: a dark groove with a light lip beside it
+    const x = (R() - 0.5) * w * 0.8, y = (R() - 0.5) * h * 0.8, hz = R() < 0.5, l = big * (0.1 + R() * 0.16), cr = rock ? R() * 1.2 - 0.6 : 0;
+    g.lineWidth = max(0.5, big / 150); g.strokeStyle = 'rgba(0,0,0,.34)'; g.beginPath(); g.moveTo(x, y); g.lineTo(x + (hz ? l : cr * l * 0.3), y + (hz ? cr * l * 0.3 : l)); g.stroke();
+    g.strokeStyle = 'rgba(255,255,255,.14)'; g.beginPath(); g.moveTo(x + 0.7, y + 0.7); g.lineTo(x + 0.7 + (hz ? l : cr * l * 0.3), y + 0.7 + (hz ? cr * l * 0.3 : l)); g.stroke();
+  }
+  if (!rock) {
+    const rv = clamp(floor(big / 5), 4, 40);
+    for (let i = 0; i < rv; i++) { const x = (R() - 0.5) * w * 0.85, y = (R() - 0.5) * h * 0.85; g.fillStyle = R() < 0.55 ? 'rgba(255,255,255,.28)' : 'rgba(0,0,0,.3)'; g.fillRect(x, y, big > 60 ? 1.4 : 0.9, big > 60 ? 1.4 : 0.9); }
+    const lights = clamp(floor(big / 18), 1, 7); for (let i = 0; i < lights; i++) { const x = (R() - 0.5) * w * 0.7, y = (R() - 0.5) * h * 0.7; g.fillStyle = R() < 0.5 ? 'rgba(130,230,255,.9)' : 'rgba(255,190,90,.9)'; g.beginPath(); g.arc(x, y, max(0.6, big / 90), 0, TAU); g.fill(); }
+  } else { for (let i = 0; i < 5; i++) { const x = (R() - 0.5) * w * 0.6, y = (R() - 0.5) * h * 0.6, r = big * (0.04 + R() * 0.07); g.fillStyle = 'rgba(0,0,0,.22)'; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); g.strokeStyle = 'rgba(255,255,255,.14)'; g.beginPath(); g.arc(x - 0.6, y - 0.6, r, PI * 0.9, PI * 1.9); g.stroke(); } }
+  g.restore();
+}
+function spr(key, w, h, fn) { let c = SPR[key]; if (c) return c; c = SPR[key] = document.createElement('canvas'); c.width = w * SS; c.height = h * SS; const g = c.getContext('2d'); g.scale(SS, SS); g.translate(w / 2, h / 2); g.lineJoin = 'round'; const R_ = rng(key.length * 7919 + key.charCodeAt(0) * 31); fn(g, R_); sprDetail(g, w, h, R_, key); c.hw = w / 2; c.hh = h / 2; return c; }
 function blit(c, x, y, a, s = 1, alpha = 1) { cx.save(); cx.translate(x, y); cx.rotate(a); if (alpha < 1) cx.globalAlpha = alpha; cx.drawImage(c, -c.hw * s, -c.hh * s, c.hw * 2 * s, c.hh * 2 * s); cx.restore(); }
 const poly = (g, p) => { g.beginPath(); g.moveTo(p[0][0], p[0][1]); for (let i = 1; i < p.length; i++) g.lineTo(p[i][0], p[i][1]); g.closePath(); };
 const mirror = p => p.concat(p.slice().reverse().map(([x, y]) => [x, -y]));
@@ -317,6 +338,7 @@ function planetCanvas(pl) {
         if (K.lava) { const cr = abs(fbm(x * 4.5 + sd, y * 4.5, z * 4.5, 4) - 0.5); if (cr < 0.045) { col = mixc(col, [255, 150, 40], 1 - cr / 0.045); night = 1; } }
         if (K.craters) for (const q of craters) { const cd = hypot(x - q[0], y - q[1], z - q[2]); if (cd < q[3] && z > -0.1) { const t = cd / q[3]; col = mixc(col, t > 0.8 ? [220, 220, 224] : [50, 50, 54], t > 0.8 ? (t - 0.8) * 3 : (0.8 - t) * 0.6); } }
       }
+      { const dt3 = fbm(x * K.f * 4 + sd * 3, y * K.f * 4, z * K.f * 4, 3), sl = fbm(x * K.f * 9 + sd, y * K.f * 9, z * K.f * 9, 2); col = [col[0], col[1], col[2]].map(v => v * (0.84 + 0.3 * dt3 + 0.06 * (sl - 0.5))); }
       if (K.clouds) { const cl = fbm(x * 3.2 + sd * 2, y * 3.6, z * 3.2, 5); const cc = clamp((cl - (0.72 - K.clouds * 0.25)) * 3.4, 0, 0.8); if (cc > 0) col = mixc(col, K.cloudCol ? hex(K.cloudCol) : [250, 252, 255], cc); }
     }
     // lighting: lambert + terminator softness; atmosphere limb glow
@@ -401,7 +423,10 @@ function processEvents(s) {
     else if (k === 'warp') { ring(e[1], e[2], 40, 4, 0.4, '#bff', 3); ring(e[3], e[4], 4, 50, 0.4, '#bff', 3); tone(200, 0.35, 'sine', 0.1, 1600); }
     else if (k === 'graze') { sparks(e[1], e[2], 6, '#fff', 150, 0.3, 1.5); }
     else if (k === 'sh') { sparks(e[1], e[2], 14, '#ff6a3a', 260, 0.5, 2); SFX.hit(); shake = max(shake, 9); if (secRole(e[3]) === me.role) { flash = 0.35; flashC = '#f00'; } }
-    else if (k === 'sd') { toast('⚠ ' + secName(e[1]) + ' DESTROYED: on fire, benefits lost', '#f66'); SFX.alarm(); if (e[1] === me.role) banner('YOUR STATION IS DOWN<br><span style="font-size:.5em">hold FIRE to self-patch · the Repair crew sees it too</span>', 2.6); }
+    else if (k === 'sd') { toast('⚠ ' + secName(e[1]) + ' DESTROYED: on fire, benefits lost', '#f66'); SFX.alarm();
+      if (e[1] === REPAIR) banner(me.role === REPAIR ? 'YOUR REPAIR BAY IS DESTROYED<br><span style="font-size:.5em">no repairs or drones until your crew fixes it</span>' : 'REPAIR BAY DESTROYED!<br><span style="font-size:.5em;color:#ffd54a">REPAIR IT IMMEDIATELY · CLICK RAPIDLY</span>', 3.2);
+      else if (e[1] === me.role) banner('YOUR STATION IS DOWN<br><span style="font-size:.5em">the Repair crew must click it to repair it</span>', 2.6); }
+    else if (k === 'dr') { if (me.role === REPAIR) toast(e[1] ? '🛸 Drone disabled: repairs are 50% faster' : '🛸 Drone launched', e[1] ? '#6f6' : '#6df'); }
     else if (k === 'sr') { toast('✔ ' + secName(e[1]) + ' back online', '#7f7'); SFX.fixed(); }
     else if (k === 'port') { toast('🛠 ' + RSHORT[e[1]] + ' port ' + (e[2] + 1) + ' installed: ' + (portInfo(e[1], e[2]) || { name: e[3] }).name, '#6df'); SFX.core(); }
     else if (k === 'cv') { SFX.coin(); }
@@ -417,7 +442,10 @@ function processEvents(s) {
     else if (k === 'resc') { ring(e[1], e[2], 4, 80, 0.5, '#7f7', 3); toast('🛟 Hostage pod rescued', '#7f7'); SFX.fixed(); }
     else if (k === 'wave') { banner('WAVE ' + e[1], 1.5); SFX.wave(); }
     else if (k === 'boss') { banner('⚠ FLAGSHIP INBOUND', 2.2); SFX.alarm(); }
-    else if (k === 'ms') { banner(e[1] + '<br><span style="font-size:.45em">' + (MTYPES[e[2]] || {}).n + '</span>', 2.4); SFX.wave(); }
+    else if (k === 'ms') { const lv = e[3] | 0; banner(e[1] + '<br><span style="font-size:.45em">' + (MTYPES[e[2]] || {}).n + ' · Lv ' + lv + '</span>', 2.4); SFX.wave();
+      const fk = 'tss_full_' + me.code;
+      if (lv > EFIRE_WEAK_LV) { if (!localStorage.getItem(fk)) { localStorage.setItem(fk, '1'); setTimeout(() => { banner('LEVEL ' + lv + ': ENEMY FIRE IS NOW AT FULL STRENGTH<br><span style="font-size:.45em;color:#ffd54a">levels 1–' + EFIRE_WEAK_LV + ' had ' + round((1 - EFIRE_WEAK) * 100) + '% weaker enemy bullets</span>', 5); SFX.alarm(); }, 2600); toast('⚠ Enemy fire is now at FULL strength (level ' + lv + '+)', '#f88'); } else toast('Enemy fire: full strength', '#f88'); }
+      else toast('ℹ Level ' + lv + ': enemy bullet damage reduced by ' + round((1 - EFIRE_WEAK) * 100) + '% (full strength from level ' + (EFIRE_WEAK_LV + 1) + ')', '#9cf'); }
     else if (k === 'win') { banner('MISSION COMPLETE', 2.4); SFX.win(); }
     else if (k === 'lose') { banner('SHIP LOST', 2.4); SFX.lose(); }
     else if (k === 'mk') { toast('🛠 Ship upgraded to ' + MK_NAMES[e[1]] + ': the hull grew new hard-points', '#6df'); SFX.core(); }
@@ -439,7 +467,8 @@ function interp() {
   o.dr = B.dr.map((d, i) => d && A_.dr[i] ? [lerp(A_.dr[i][0], d[0], t), lerp(A_.dr[i][1], d[1], t)] : d);
   o.sd = B.sd && A_.sd ? [lerp(A_.sd[0], B.sd[0], t), lerp(A_.sd[1], B.sd[1], t)] : B.sd;
   o.e = b.e.map(e => { const p = a.eMap.get(e[0]); if (!p) return e; const n = e.slice(); n[2] = L(p, e, 2); n[3] = L(p, e, 3); n[4] = lerpA(p[4], e[4], t); if (e[8] && p[8]) n[8] = e[8].map((q, k) => p[8][k] ? [q[0], lerpA(p[8][k][1], q[1], t), q[2]] : q); return n; });
-  o.eb = b.eb.map(q => { const p = a.bMap.get(q[0]); return p ? [q[0], L(p, q, 1), L(p, q, 2), q[3], q[4], q[5]] : q; });
+  o.eb = b.eb.map(q => { if (q[7]) { const p = a.bMap.get(q[0]); return p ? [q[0], L(p, q, 1), L(p, q, 2), q[3], q[4], q[5]] : q; }
+    const dt_ = rt - b.tm, d_ = q[6] * (a.bMap.has(q[0]) ? dt_ : max(0, dt_)); return [q[0], q[1] + cos(q[3]) * d_, q[2] + sin(q[3]) * d_, q[3], q[4], q[5]]; }); // v4: non-homing shots are extrapolated along one straight line
   o.pp = b.pp.map(q => { const p = a.pMap.get(q[0]); return p ? [q[0], L(p, q, 1), L(p, q, 2), lerpA(p[3], q[3], t), q[4]] : q; });
   o.al = b.al.map(q => { const p = a.aMap.get(q[0]); return p ? [q[0], q[1], L(p, q, 2), L(p, q, 3), lerpA(p[4], q[4], t), q[5], q[6]] : q; });
   o.wv = b.wv; o.pk = b.pk.map(q => { const p = a.kMap.get(q[0]); return p ? [q[0], L(p, q, 1), L(p, q, 2), q[3]] : q; });
@@ -452,6 +481,7 @@ let lastAct = performance.now(); for (const ev of ['mousemove', 'mousedown', 'ke
 const K = {}; let mouse = { x: 0, y: 0, down: 0 }, thr = 0.65, rtSel = -1, acts = [];
 const joy = { on: 0, id: null, vx: 0, vy: 0, lastA: -PI / 2 }, tb = { f: 0, as: 0 };
 function act(a) { acts.push(a); }
+function rapTake() { const n = rapClicks; rapClicks = 0; return n; }
 function setThr(v) { thr = clamp(v, 0.25, 1); }
 addEventListener('keydown', e => {
   if (e.target.tagName === 'INPUT') { if (e.key === 'Enter' && !joined) launch(); return; }
@@ -461,6 +491,8 @@ addEventListener('keydown', e => {
   if (k === 'h' || k === '?') toggleCard(); if (k === 'tab') togglePanel('rolesp'); if (k === 'u') togglePanel('upp');
   if (k === 'escape') { $('rolesp').classList.add('hide'); $('upp').classList.add('hide'); $('card').classList.add('hide'); }
   if (me.role === ENG && k >= '1' && k <= '4') act('p' + k);
+  if (me.role === REPAIR && k === 'g') act('dr');
+  if (k === ' ' && me.role !== REPAIR && lastSnap && lastSnap.ph === 'mission' && lastSnap.sh.dn[REPAIR]) rapHit();
   if (me.role === REPAIR && k >= '0' && k <= '6') rtSel = k === '0' ? 18 : +k - 1;
   if (me.role === ENG && (k === 'w' || k === 'arrowup')) setThr(thr + 0.125); if (me.role === ENG && (k === 's' || k === 'arrowdown')) setThr(thr - 0.125);
 });
@@ -496,7 +528,7 @@ setInterval(() => {
   if (!joined || !cur) return;
   const [ax, ay] = aimWorld(cur);
   const fire = mouse.down || K['enter'] || tb.f || (isTouch && joy.on && hypot(joy.vx, joy.vy) > 0.85 && (me.role === GUNL || me.role === GUNR || me.role === PILOT));
-  send({ t: 'i', ax: round(ax), ay: round(ay), f: fire ? 1 : 0, as: K.f || tb.as ? 1 : 0, thr: round(thr * 1000) / 1000, rt: rtSel, idle: performance.now() - lastAct > 30000 ? 1 : 0, a: acts.splice(0, 6) });
+  send({ t: 'i', ax: round(ax), ay: round(ay), f: fire ? 1 : 0, as: K.f || tb.as ? 1 : 0, thr: round(thr * 1000) / 1000, rt: rtSel, mb: me.role === REPAIR && MG.key ? round(MG.boost * 100) / 100 : 0, ck: rapTake(), idle: performance.now() - lastAct > 30000 ? 1 : 0, a: acts.splice(0, 6) });
 }, 50);
 
 // ---------- UI ----------
@@ -523,12 +555,19 @@ function renderRoles() {
 // ----- upgrade screen: skill pyramid -----
 let upTree = 'pilot', portPending = null;
 const TREE_LABEL = { pilot: 'Pilot', gun: 'Gunners', engineer: 'Engineer', shield: 'Shields', repair: 'Repair/Drone' };
+const cap1 = t => t.charAt(0).toUpperCase() + t.slice(1);
+const fxHtml = ls => ls.map(l => { const [a, b] = l.split(': '); return `<span class="fxl"><u>${cap1(a)}</u>: ${b}</span>`; }).join('');
+function nodeText(n, P, r, mk) {
+  if (n.ab) return `<small>${n.d}</small>`;
+  const P2 = { path: P.path.slice(0, r), i: {}, b: {} };   // stats before this row: what the node changes, current -> next
+  return `<small class="fxs">${fxHtml(D.fxLines(upTree, P2, n.fx, mk))}${n.edge ? '<span class="fxe">edge bonus +25% included</span>' : ''}</small>`;
+}
 function pyrNode(T, P, r, i, mk, inMission) {
   const n = T.rows[r][i], picked = P.path[r] === i, next = P.path.length === r, done = P.path.length > r;
   const allowed = next && pyrAllowed(P.path, r).includes(i), cost = NODE_COST[r], can = allowed && me.cr >= cost && !inMission;
   const cls = ['pn', picked ? 'own' : '', allowed ? 'ok' : '', done && !picked ? 'skip' : '', !done && !allowed ? 'lock' : '', n.ab ? 'act' : '', n.edge ? 'edge' : '', n.cap ? 'cap' : ''].join(' ');
   const tag = n.ab ? `<span class="y">[${r < 2 ? 'E' : 'R'}]</span> ` : '';
-  return `<button class="${cls}" style="grid-column:${r + 2 * i + 1}/span 2;grid-row:${r + 1}" data-buy="node" data-id="${n.id}" ${can ? '' : 'disabled'} title="${n.d.replace(/"/g, '&quot;')}"><b>${picked ? '✔ ' : ''}${tag}${n.n}</b><small>${n.d}</small><i>${picked ? 'PICKED' : allowed ? cost + '¢' : done ? '' : 'row ' + (r + 1)}${n.edge ? ' · ◀▶ edge' : ''}</i></button>`;
+  return `<button class="${cls}" style="grid-column:${r + 2 * i + 1}/span 2;grid-row:${r + 1}" data-buy="node" data-id="${n.id}" ${can ? '' : 'disabled'} title="${n.d.replace(/"/g, '&quot;')}"><b>${picked ? '✔ ' : ''}${tag}${n.n}</b>${nodeText(n, P, r, mk)}<i>${picked ? 'PICKED' : allowed ? cost + '¢' : done ? '' : 'row ' + (r + 1)}${n.edge ? ' · ◀▶ edge' : ''}</i></button>`;
 }
 function renderUp() {
   if (me.role < 0 || !me.tr || !lastSnap) return;
@@ -548,8 +587,8 @@ function renderUp() {
   const pr = P.path.length;
   h += `<h4 class="ph">${T.name || TREE_LABEL[upTree]} skill pyramid <span class="small">· pick ONE node per row, top to bottom. The next row only offers the nodes touching your last pick (an edge pick leaves one choice, a middle pick two). Edge nodes are ~25% stronger; the bottom two are the best.${pr >= 5 ? ' <b class="g">Complete.</b>' : ' Now choosing row ' + (pr + 1) + ' of 5 · ' + NODE_COST[pr] + '¢'}</span></h4>`;
   h += '<div class="pyr">' + T.rows.map((row, r) => row.map((n, i) => pyrNode(T, P, r, i, mk, inMission)).join('')).join('') + '</div>';
-  h += '<div class="row">' + T.inf.map(x => { const lv = P.i[x[0]] || 0, c = infCost(lv), cap = infCap(upTree, x[0], lv); return btn(`data-buy="inf" data-id="${x[0]}"`, `<b>${x[1]}</b> · Lv ${lv} · ${cap ? 'MAX' : c + '¢'}<small>${x[0] === 'i_arc' ? '+5° of shield arc per level (cap 90°)' : 'per level, no cap'}</small>`, cap || me.cr < c || inMission); }).join('') + '</div>';
-  h += '<div class="row">' + T.big.map(x => { const own = P.b[x[0]]; return btn(`data-buy="big" data-id="${x[0]}"`, `${own ? '✔ ' : '★ '}<b>${x[1]}</b> ${own ? '' : '· ' + x[3] + '¢'}${x[4] > mk ? ` · <span class="c">needs ${MK_NAMES[x[4]]}</span>` : ''}<small>${x[2]}</small>`, own || me.cr < x[3] || x[4] > mk || inMission, own ? 'own' : ''); }).join('') + '</div>';
+  h += '<div class="row">' + T.inf.map(x => { const lv = P.i[x[0]] || 0, c = infCost(lv), cap = infCap(upTree, x[0], lv); return btn(`data-buy="inf" data-id="${x[0]}"`, `<b>${x[1]}</b> · Lv ${lv} · ${cap ? 'MAX' : c + '¢'}<small class="fxs">${fxHtml(D.fxLines(upTree, P, { [x[2]]: x[3] }, mk))}<span class="fxe">${x[0] === 'i_arc' ? 'each level +5°, max 90°' : 'every level adds the same, no cap'}</span></small>`, cap || me.cr < c || inMission); }).join('') + '</div>';
+  h += '<div class="row">' + T.big.map(x => { const own = P.b[x[0]]; return btn(`data-buy="big" data-id="${x[0]}"`, `${own ? '✔ ' : '★ '}<b>${x[1]}</b> ${own ? '' : '· ' + x[3] + '¢'}${x[4] > mk ? ` · <span class="c">needs ${MK_NAMES[x[4]]}</span>` : ''}<small class="fxs"><span class="fxl">${x[2]}</span>${Object.keys(x[5] || {}).length ? fxHtml(D.fxLines(upTree, P, x[5], mk)) : ''}</small>`, own || me.cr < x[3] || x[4] > mk || inMission, own ? 'own' : ''); }).join('') + '</div>';
   // ports (this seat only; permanent)
   if (upTree === myT) {
     const crew = s.crew[me.role], inst = crew[7] || [0, 0];
@@ -557,8 +596,8 @@ function renderUp() {
     for (let sl = 0; sl < 2; sl++) {
       h += `<div class="col"><h4>Port ${sl + 1} ${sl >= mk ? `<span class="c">(needs ${MK_NAMES[sl + 1]})</span>` : ''}</h4>`;
       const p = inst[sl];
-      if (p) { const t = T.ports.find(x => x[0] === p[0]), lv = p[1], c = portUpCost(lv); h += `<div class="nd own"><b>✔ ${t[1]}</b> · Lv ${lv}/${PORT_MAX_LV}<small>${t[2]} · each level: +12% effect, +0.4 section HP</small></div>` + btn(`data-pup="${sl}"`, lv >= PORT_MAX_LV ? 'Fully upgraded' : `▲ Upgrade ${t[1]} → Lv ${lv + 1} · ${c}¢`, lv >= PORT_MAX_LV || me.cr < c || inMission); }
-      else h += T.ports.map(p => { const pend = portPending && portPending[0] === sl && portPending[1] === p[0]; return btn(`data-port="${sl}" data-id="${p[0]}"`, `<b>${pend ? '⚠ CLICK AGAIN: PERMANENT · ' : ''}${p[1]}</b> · ${PORT_COST[sl]}¢<small>${p[2]}</small>`, sl >= mk || me.cr < PORT_COST[sl] || inMission, pend ? 'warn' : ''); }).join('');
+      if (p) { const t = T.ports.find(x => x[0] === p[0]), lv = p[1], c = portUpCost(lv); h += `<div class="nd own"><b>✔ ${t[1]}</b> · Lv ${lv}/${PORT_MAX_LV}<small>${t[2]}<span class="fxs"><span class="fxl"><u>Port effect</u>: ${100 + 12 * lv}% ${lv < PORT_MAX_LV ? '→ ' + (100 + 12 * (lv + 1)) + '%' : '(max)'}</span><span class="fxl"><u>Section HP</u>: +${(0.4 * lv).toFixed(1)} ${lv < PORT_MAX_LV ? '→ +' + (0.4 * (lv + 1)).toFixed(1) : '(max)'}</span></span></small></div>` + btn(`data-pup="${sl}"`, lv >= PORT_MAX_LV ? 'Fully upgraded' : `▲ Upgrade ${t[1]} → Lv ${lv + 1} · ${c}¢`, lv >= PORT_MAX_LV || me.cr < c || inMission); }
+      else h += T.ports.map(p => { const pend = portPending && portPending[0] === sl && portPending[1] === p[0]; return btn(`data-port="${sl}" data-id="${p[0]}"`, `<b>${pend ? '⚠ CLICK AGAIN: PERMANENT · ' : ''}${p[1]}</b> · ${PORT_COST[sl]}¢<small class="fxs"><span class="fxl">${p[2]}</span><span class="fxl"><u>Starts at</u>: effect 112%, section HP +0.4 (each level +12% / +0.4)</span></small>`, sl >= mk || me.cr < PORT_COST[sl] || inMission, pend ? 'warn' : ''); }).join('');
       h += '</div>';
     }
     h += '</div>';
@@ -588,7 +627,7 @@ function renderMap(s) {
   $('mapsub').innerHTML = `Campaign: ${s.md} main missions cleared · ${MK_NAMES[s.mk]} · ${s.co} ◆ cores<br>Vote weight: <b class="y">Pilot ${s.pw}</b> (live players − 1) · everyone else 1 · ${hum} player${hum === 1 ? '' : 's'} aboard. Launches when all players vote or time runs out.`;
   const key = s.opts.map(o => o.id).join() + '|' + JSON.stringify(s.votes) + s.my;
   if (renderMap.key === key) return; renderMap.key = key;
-  $('mcards').innerHTML = s.opts.map((o, i) => { const v = s.votes[o.id] || 0, M = MTYPES[o.type]; return `<div class="mc ${o.kind} ${s.my === o.id ? 'voted' : ''}" data-id="${o.id}"><canvas width="240" height="120" data-pl="${i}"></canvas><span class="${o.kind === 'main' ? 'y' : 'small'}">${o.kind === 'main' ? '★ MAIN MISSION' : '◇ SIDE MISSION'}</span> · <span class="d${o.diff}">${DIFFS[o.diff].n}</span> · Lv ${o.level}<b>${o.planet.name}</b><span class="c">${M.n}</span><br><span class="small">${M.d}${o.mod && o.mod !== 'none' ? ' · ☄ ' + o.mod : ''}</span><br><span class="small">Reward ×${DIFFS[o.diff].m}${o.diff >= 2 || o.kind === 'main' ? ' · +1 ◆ core' : ''}</span><br><span class="v">${v ? '▮'.repeat(min(v, 12)) + ' ' + v : ''}</span></div>`; }).join('');
+  $('mcards').innerHTML = s.opts.map((o, i) => { const v = s.votes[o.id] || 0, M = MTYPES[o.type]; return `<div class="mc ${o.kind} ${s.my === o.id ? 'voted' : ''}" data-id="${o.id}"><canvas width="240" height="120" data-pl="${i}"></canvas><span class="${o.kind === 'main' ? 'y' : 'small'}">${o.kind === 'main' ? '★ MAIN MISSION' : '◇ SIDE MISSION'}</span> · <span class="d${o.diff}">${DIFFS[o.diff].n}</span> · Lv ${o.level}<b>${o.planet.name}</b><span class="c">${M.n}</span><br><span class="small">${M.d}${o.mod && o.mod !== 'none' ? ' · ☄ ' + o.mod : ''}</span><br><span class="small" style="color:${o.level > EFIRE_WEAK_LV ? '#f99' : '#9cf'}">${o.level > EFIRE_WEAK_LV ? '⚠ enemy fire: FULL strength' : 'enemy fire: -' + round((1 - EFIRE_WEAK) * 100) + '% (levels 1–' + EFIRE_WEAK_LV + ')'}</span><br><span class="small">Reward ×${DIFFS[o.diff].m}${o.diff >= 2 || o.kind === 'main' ? ' · +1 ◆ core' : ''}</span><br><span class="v">${v ? '▮'.repeat(min(v, 12)) + ' ' + v : ''}</span></div>`; }).join('');
   $('mcards').querySelectorAll('canvas[data-pl]').forEach(c => { const o = s.opts[+c.dataset.pl], g = c.getContext('2d'); g.drawImage(neb, 0, 0, 240, 120); for (let i = 0; i < 30; i++) { g.fillStyle = '#fff'; g.fillRect((i * 97) % 240, (i * 53) % 120, 1, 1); } g.drawImage(planetCanvas(o.planet), 40, -22, 160, 160); });
   $('mcards').querySelectorAll('.mc').forEach(d => d.onclick = () => { send({ t: 'vote', id: d.dataset.id }); SFX.ui(); });
 }
@@ -617,12 +656,12 @@ function hudDom(s) {
   if (s.ph === 'upgrade' || !$('upp').classList.contains('hide')) upFoot();
   if (isTouch) $('touch').style.visibility = (!$('upp').classList.contains('hide') || !$('rolesp').classList.contains('hide') || !$('map').classList.contains('hide')) ? 'hidden' : '';
   const inM = s.ph === 'mission' && me.role >= 0;
-  $('abar').classList.toggle('hide', !inM || isTouch); $('engp').classList.toggle('hide', !(inM && me.role === ENG)); $('repp').classList.toggle('hide', !(inM && me.role === REPAIR));
+  $('abar').classList.toggle('hide', !inM || isTouch); $('engp').classList.toggle('hide', !(inM && me.role === ENG)); $('repp').classList.toggle('hide', !(inM && me.role === REPAIR)); rapPanel(s);
   if (inM) { if (isTouch) touchLabels(s); else abilityBar(s); if (me.role === ENG) engPanel(s); if (me.role === REPAIR) repPanel(s); }
   const myB = me.role >= 0 ? s.crew[me.role][6] : []; $('buffs').innerHTML = inM && myB.length ? myB.map(b => ({ cry: '⚔ Battle Cry', reroute: '⚡ Rerouted engine power', rhalf: '⚡ Split power', stim: '💉 Stim', over: '🔥 Overcharge', ovl: '⚡ Overload' }[b] || b)).join(' · ') : '';
 }
 // ----- live HUD pieces (v3) -----
-const HINTS = [[['Click', 'nose laser'], ['Aim', 'steer']], [['Click', 'fire turrets'], ['F', 'assist']], [['Hold Fire', 'repair in band'], ['1-6 / 0', 'pick target']], [['W/S', 'throttle'], ['1·2·3·4', 'power']], [['Aim', 'aim the arc'], ['Ship turns', 'arc stays put']], [['Click', 'fire turrets'], ['F', 'assist']]];
+const HINTS = [[['Click', 'nose laser'], ['Aim', 'steer']], [['Click', 'fire turrets']], [['Click a port', 'start repair'], ['G', 'drone off: +50%']], [['W/S', 'throttle'], ['1·2·3·4', 'power']], [['Aim', 'aim the arc'], ['Ship turns', 'arc stays put']], [['Click', 'fire turrets']]];
 function crewLine(s, c, i) { const sh = s.sh, down = []; for (let k = 0; k < 18; k++) if (sh.dn[k] && secRole(k) === i) down.push(secShort(k)); return `<div class="${i === me.role ? 'me' : c[1] ? 'bot' : ''} ${down.length ? 'dn' : ''}">${RICON[i]} ${RSHORT[i]} ${c[1] ? '🤖' : '👤'} ${c[0]}${c[4] ? ' (idle·bot)' : ''}${c[3] ? ' 🔧' : ''}${down.length ? ' ✖ ' + down.join(', ') + ' DOWN' : ''}${c[6].length ? ' <span class="y">' + c[6].map(b => '⚡' + b).join(' ') + '</span>' : ''}</div>`; }
 function abilityBar(s) {
   const r = me.role, ab = s.crew[r][5], key = r + '|' + ab.map(a => a ? a[0] : '-').join();
@@ -639,17 +678,169 @@ function touchLabels(s) {
   ['q', 'e', 'r'].forEach((k, i) => { const a = ab[i], b = $('t-' + k); const t = a ? (a[1] > 0 ? Math.ceil(a[1]) + 's' : ABIL[a[0]].n.split(' ').pop().slice(0, 7)) : '🔒'; const h = `<b>${k.toUpperCase()}</b><br><small>${t}</small>`; if (b.dataset.h !== h) { b.dataset.h = h; b.innerHTML = h; } b.style.opacity = a && a[1] <= 0 ? 1 : 0.5; });
   $('t-alt').style.display = 'none';
 }
+// ---------- v4: repair side panel, per-station minigames, CLICK RAPIDLY ----------
+const MGW = 360, MGH = 170;
+const MG = { key: '', kind: '', boost: 0, bt: 0, mx: 180, my: 90, dn: 0, clk: 0, t: 0, S: {}, fl: 0 };
+const MGN = {
+  track: ['SIGNAL TRACE · Cockpit', 'Keep your cursor on the moving beacon'],
+  seq: ['BOLT SEQUENCE · Turret', 'Click the numbered bolts in order 1 → 5'],
+  press: ['FUEL PRESSURE · Engines', 'HOLD the mouse to raise pressure, release to drop it. Keep the needle in the green band'],
+  timing: ['FREQUENCY LOCK · Deflector', 'Click when the sweep is inside the green band'],
+  dial: ['BAY CALIBRATION · Repair Bay', 'Click when the dial needle crosses the green arc'],
+  weld: ['SEAM WELD · Hull', 'HOLD the mouse and trace the glowing seam with the torch'],
+  wire: ['WIRE PATCH · Port', 'Click a terminal on the left, then the matching colour on the right']
+};
+function mgKind(t) { return t === PILOT ? 'track' : (t === GUNL || t === GUNR) ? 'seq' : t === ENG ? 'press' : t === SHIELD ? 'timing' : t === REPAIR ? 'dial' : t === 18 ? 'weld' : 'wire'; }
+const WCOL = ['#ff5a5a', '#5ad0ff', '#ffd54a', '#6dff8a'];
+function mgInit(kind) {
+  const S = MG.S;
+  if (kind === 'seq') { S.next = 1; S.nodes = []; for (let n = 1; n <= 5; n++) { let p, k = 0; do { p = { x: 24 + Math.random() * 312, y: 48 + Math.random() * 108, n }; k++; } while (k < 40 && S.nodes.some(q => hypot(q.x - p.x, q.y - p.y) < 40)); S.nodes.push(p); } }
+  if (kind === 'press') S.p = 0.3;
+  if (kind === 'timing') S.c = (Math.random() - 0.5) * 1.2;
+  if (kind === 'dial') S.c = Math.random() * PI * 2;
+  if (kind === 'weld') { S.ph = Math.random() * 6; S.prog = 0; }
+  if (kind === 'wire') { const o = [0, 1, 2, 3]; for (let i = 3; i > 0; i--) { const j = floor(Math.random() * (i + 1)); [o[i], o[j]] = [o[j], o[i]]; } S.right = o; S.sel = -1; S.done = [0, 0, 0, 0]; }
+}
+(function () {
+  const c = $('rg'); const pos = e => { const r = c.getBoundingClientRect(); MG.mx = (e.clientX - r.left) * MGW / r.width; MG.my = (e.clientY - r.top) * MGH / r.height; };
+  c.addEventListener('pointerdown', e => { pos(e); MG.dn = 1; MG.clk = 1; try { c.setPointerCapture(e.pointerId); } catch (_) { } e.preventDefault(); });
+  c.addEventListener('pointermove', pos);
+  const up = () => { MG.dn = 0; }; c.addEventListener('pointerup', up); c.addEventListener('pointercancel', up);
+})();
+const seamY = (x, ph) => 108 + 26 * sin(x / 46 + ph) + 10 * sin(x / 17 + ph * 2);
+function mgGood(ok, dt, tau) { MG.boost += ((ok ? 1 : 0) - MG.boost) * (1 - exp(-dt / tau)); }
+function mgBank(dt) { MG.bt = max(0, MG.bt - dt); MG.boost = clamp(MG.bt / 2.5, 0, 1); }
+const MGF = {
+  track(g, dt, tol) {
+    const t = MG.t, bx = 180 + cos(t * 0.9) * 130 + sin(t * 2.1) * 22, by = 98 + sin(t * 1.3) * 42 + cos(t * 2.7) * 10, d = hypot(MG.mx - bx, MG.my - by), ok = d < 28 * tol;
+    mgGood(ok, dt, 1.2);
+    g.strokeStyle = '#123'; g.lineWidth = 1; for (let x = 0; x <= MGW; x += 30) { g.beginPath(); g.moveTo(x, 24); g.lineTo(x, MGH); g.stroke(); } for (let y = 24; y <= MGH; y += 30) { g.beginPath(); g.moveTo(0, y); g.lineTo(MGW, y); g.stroke(); }
+    g.strokeStyle = ok ? '#6f6' : '#fa4'; g.lineWidth = 2; g.beginPath(); g.arc(bx, by, 28 * tol, 0, 7); g.stroke();
+    g.fillStyle = ok ? '#6f6' : '#fa4'; g.shadowColor = g.fillStyle; g.shadowBlur = 12; g.beginPath(); g.arc(bx, by, 8, 0, 7); g.fill(); g.shadowBlur = 0;
+    g.strokeStyle = '#fff'; g.beginPath(); g.moveTo(MG.mx - 9, MG.my); g.lineTo(MG.mx + 9, MG.my); g.moveTo(MG.mx, MG.my - 9); g.lineTo(MG.mx, MG.my + 9); g.stroke();
+  },
+  seq(g, dt, tol) {
+    const S = MG.S; mgBank(dt);
+    if (MG.clk) { const h = S.nodes.find(q => hypot(q.x - MG.mx, q.y - MG.my) < 17 && q.n >= S.next - 0 && q.n === S.next); const any = S.nodes.find(q => hypot(q.x - MG.mx, q.y - MG.my) < 17);
+      if (h) { S.next++; MG.fl = 0; SFX.ui && SFX.ui(); if (S.next > 5) { MG.bt = min(7, MG.bt + 4 + tol); mgInit('seq'); } } else if (any && any.n > S.next) { S.next = 1; MG.fl = 0.3; } }
+    for (const q of S.nodes) { const done = q.n < S.next; g.fillStyle = done ? '#1c5a2a' : '#1a2a44'; g.strokeStyle = done ? '#6f6' : q.n === S.next ? '#ffd54a' : '#6af'; g.lineWidth = q.n === S.next ? 3 : 2; g.beginPath(); g.arc(q.x, q.y, 15, 0, 7); g.fill(); g.stroke();
+      g.fillStyle = '#fff'; g.font = 'bold 16px monospace'; g.textAlign = 'center'; g.fillText(q.n, q.x, q.y + 6); for (let a = 0; a < 6; a++) { g.fillStyle = '#9ab'; g.fillRect(q.x + cos(a * 1.047) * 15 - 1, q.y + sin(a * 1.047) * 15 - 1, 2, 2); } }
+    g.textAlign = 'left'; if (MG.fl > 0) { MG.fl -= dt; g.fillStyle = 'rgba(255,60,60,.25)'; g.fillRect(0, 24, MGW, MGH); }
+  },
+  press(g, dt, tol) {
+    const S = MG.S, t = MG.t, c = 0.55 + 0.2 * sin(t * 0.6) + 0.1 * sin(t * 1.7), hw = 0.12 * tol;
+    S.p = clamp(S.p + (MG.dn ? 0.55 : -0.38) * dt + 0.03 * sin(t * 3.1) * dt, 0, 1); const ok = abs(S.p - c) < hw; mgGood(ok, dt, 1.0);
+    const x0 = 30, w = 300, y0 = 70, hh = 40; g.fillStyle = '#0a1420'; g.fillRect(x0, y0, w, hh); g.strokeStyle = '#456'; g.strokeRect(x0, y0, w, hh);
+    g.fillStyle = 'rgba(60,255,90,.4)'; g.fillRect(x0 + (c - hw) * w, y0, hw * 2 * w, hh); g.strokeStyle = '#6f6'; g.strokeRect(x0 + (c - hw) * w, y0, hw * 2 * w, hh);
+    g.fillStyle = '#26466b'; g.fillRect(x0, y0 + 28, S.p * w, 12);
+    for (let i = 0; i <= 10; i++) { g.fillStyle = '#678'; g.fillRect(x0 + i * w / 10 - 0.5, y0 + hh + 2, 1, i % 5 ? 4 : 8); }
+    g.fillStyle = ok ? '#fff' : '#f84'; g.fillRect(x0 + S.p * w - 3, y0 - 10, 6, hh + 20);
+    g.fillStyle = '#9ab'; g.font = '13px monospace'; g.fillText(MG.dn ? 'pressurising…' : 'venting…', x0, 148);
+  },
+  timing(g, dt, tol) {
+    const S = MG.S, p = sin(MG.t * 2.1), hw = 0.17 * tol; mgBank(dt); const ok = abs(p - S.c) < hw;
+    if (MG.clk) { if (ok) { MG.bt = min(7, MG.bt + 3); S.c = (Math.random() - 0.5) * 1.3; SFX.ui && SFX.ui(); } else { MG.bt = max(0, MG.bt - 1.5); MG.fl = 0.25; } }
+    const X = v => (v + 1) / 2 * 300 + 30; g.fillStyle = '#0a1420'; g.fillRect(30, 60, 300, 56); g.strokeStyle = '#456'; g.strokeRect(30, 60, 300, 56);
+    g.fillStyle = 'rgba(60,255,90,.4)'; g.fillRect(X(S.c - hw), 60, X(S.c + hw) - X(S.c - hw), 56); g.strokeStyle = '#6f6'; g.strokeRect(X(S.c - hw), 60, X(S.c + hw) - X(S.c - hw), 56);
+    g.strokeStyle = '#1b3550'; for (let i = 0; i < 9; i++) { g.beginPath(); g.moveTo(30 + i * 37.5, 60); g.lineTo(30 + i * 37.5, 116); g.stroke(); }
+    g.fillStyle = ok ? '#fff' : '#f84'; g.shadowColor = g.fillStyle; g.shadowBlur = 8; g.fillRect(X(p) - 2, 52, 4, 72); g.shadowBlur = 0;
+    if (MG.fl > 0) { MG.fl -= dt; g.fillStyle = 'rgba(255,60,60,.25)'; g.fillRect(0, 24, MGW, MGH); }
+  },
+  dial(g, dt, tol) {
+    const S = MG.S, a = (MG.t * 2.6) % (PI * 2), hw = 0.5 * tol; mgBank(dt); const dd = atan2(sin(a - S.c), cos(a - S.c)), ok = abs(dd) < hw;
+    if (MG.clk) { if (ok) { MG.bt = min(7, MG.bt + 3); S.c = Math.random() * PI * 2; SFX.ui && SFX.ui(); } else { MG.bt = max(0, MG.bt - 1.5); MG.fl = 0.25; } }
+    const cx = 180, cy = 100, r = 52; g.lineWidth = 10; g.strokeStyle = '#13273d'; g.beginPath(); g.arc(cx, cy, r, 0, 7); g.stroke();
+    g.strokeStyle = 'rgba(60,255,90,.7)'; g.beginPath(); g.arc(cx, cy, r, S.c - hw, S.c + hw); g.stroke(); g.lineWidth = 1;
+    for (let i = 0; i < 24; i++) { const q = i * PI / 12; g.strokeStyle = '#567'; g.beginPath(); g.moveTo(cx + cos(q) * (r + 9), cy + sin(q) * (r + 9)); g.lineTo(cx + cos(q) * (r + (i % 6 ? 12 : 16)), cy + sin(q) * (r + (i % 6 ? 12 : 16))); g.stroke(); }
+    g.strokeStyle = ok ? '#fff' : '#f84'; g.lineWidth = 3; g.beginPath(); g.moveTo(cx, cy); g.lineTo(cx + cos(a) * (r + 4), cy + sin(a) * (r + 4)); g.stroke(); g.fillStyle = '#9ab'; g.beginPath(); g.arc(cx, cy, 5, 0, 7); g.fill();
+    if (MG.fl > 0) { MG.fl -= dt; g.fillStyle = 'rgba(255,60,60,.25)'; g.fillRect(0, 24, MGW, MGH); }
+  },
+  weld(g, dt, tol) {
+    const S = MG.S; let on = false;
+    if (MG.dn && abs(MG.my - seamY(MG.mx, S.ph)) < 15 * tol && abs(MG.mx - (30 + S.prog)) < 46) { on = true; S.prog = max(S.prog, MG.mx - 30); }
+    mgGood(on, dt, 0.7); if (S.prog >= 298) { S.ph = Math.random() * 6; S.prog = 0; MG.boost = 1; }
+    g.lineWidth = 10; g.strokeStyle = '#1c2a3c'; g.beginPath(); for (let x = 30; x <= 330; x += 4) g[x === 30 ? 'moveTo' : 'lineTo'](x, seamY(x, S.ph)); g.stroke();
+    g.lineWidth = 5; g.strokeStyle = '#ff9a3a'; g.shadowColor = '#fa4'; g.shadowBlur = 8; g.beginPath(); for (let x = 30; x <= 30 + S.prog; x += 4) g[x === 30 ? 'moveTo' : 'lineTo'](x, seamY(x, S.ph)); g.stroke(); g.shadowBlur = 0;
+    g.fillStyle = '#9ab'; g.fillRect(30 + S.prog - 1, seamY(30 + S.prog, S.ph) - 12, 2, 24);
+    if (on) { for (let i = 0; i < 4; i++) { g.fillStyle = '#ffe9a0'; g.fillRect(MG.mx + (Math.random() - 0.5) * 18, MG.my + (Math.random() - 0.5) * 18, 2, 2); } }
+    g.strokeStyle = on ? '#fff' : MG.dn ? '#f84' : '#9ab'; g.lineWidth = 2; g.beginPath(); g.arc(MG.mx, MG.my, 8, 0, 7); g.stroke();
+  },
+  wire(g, dt, tol) {
+    const S = MG.S; mgBank(dt);
+    if (MG.clk) {
+      for (let i = 0; i < 4; i++) { const y = 52 + i * 34; if (hypot(MG.mx - 40, MG.my - y) < 17 && !S.done[i]) S.sel = i;
+        if (hypot(MG.mx - 320, MG.my - y) < 17 && S.sel >= 0) { const col = S.right[i]; if (col === S.sel) { S.done[col] = 1; S.sel = -1; SFX.ui && SFX.ui(); if (S.done.every(v => v)) { MG.bt = min(7, MG.bt + 4 + tol); mgInit('wire'); return; } } else { S.sel = -1; MG.fl = 0.25; } } }
+    }
+    for (let i = 0; i < 4; i++) {
+      const y = 52 + i * 34, col = WCOL[i]; const ri = S.right.indexOf(i), ry = 52 + ri * 34;
+      if (S.done[i]) { g.strokeStyle = col; g.lineWidth = 5; g.beginPath(); g.moveTo(40, y); g.bezierCurveTo(130, y, 230, ry, 320, ry); g.stroke(); }
+      else if (S.sel === i) { g.strokeStyle = col; g.lineWidth = 3; g.setLineDash([6, 4]); g.beginPath(); g.moveTo(40, y); g.lineTo(MG.mx, MG.my); g.stroke(); g.setLineDash([]); }
+    }
+    for (let i = 0; i < 4; i++) { const y = 52 + i * 34; g.fillStyle = '#0a1420'; g.strokeStyle = WCOL[i]; g.lineWidth = S.sel === i ? 4 : 2; g.beginPath(); g.arc(40, y, 12, 0, 7); g.fill(); g.stroke(); g.fillStyle = WCOL[i]; g.beginPath(); g.arc(40, y, 5, 0, 7); g.fill();
+      const col = S.right[i]; g.strokeStyle = WCOL[col]; g.lineWidth = 2; g.fillStyle = '#0a1420'; g.beginPath(); g.arc(320, y, 12, 0, 7); g.fill(); g.stroke(); g.fillStyle = WCOL[col]; g.beginPath(); g.arc(320, y, S.done[col] ? 8 : 4, 0, 7); g.fill(); }
+    if (MG.fl > 0) { MG.fl -= dt; g.fillStyle = 'rgba(255,60,60,.25)'; g.fillRect(0, 24, MGW, MGH); }
+  }
+};
+const rtOK = (sh, k) => k === 18 ? sh.h < sh.hm - 0.05 : (sh.sc[k] >= 0 && (sh.dn[k] || sh.sc[k] < 0.995));
+function mgFrame(dt) {
+  if (me.role !== REPAIR || !lastSnap || lastSnap.ph !== 'mission') { MG.boost = 0; return; }
+  const c = $('rg'), g = c.getContext('2d'), sh = lastSnap.sh, tk = sh.tk, tgt = tk[0];
+  g.clearRect(0, 0, MGW, MGH); g.fillStyle = '#020610'; g.fillRect(0, 0, MGW, MGH);
+  if (tgt < 0 || sh.dn[REPAIR]) {
+    MG.boost = 0; MG.key = ''; if ($('mgh').dataset.k) { $('mgh').dataset.k = ''; $('mgh').textContent = ''; }
+    g.fillStyle = '#34506e'; g.font = 'bold 15px monospace'; g.textAlign = 'center';
+    g.fillText(sh.dn[REPAIR] ? 'REPAIR BAY OFFLINE' : 'REPAIR IDLE', 180, 80); g.font = '12px monospace'; g.fillStyle = '#6a86a6';
+    g.fillText(sh.dn[REPAIR] ? 'your crewmates must fix it' : 'click a damaged port in the list above', 180, 102); g.textAlign = 'left'; MG.clk = 0; return;
+  }
+  const kind = mgKind(tgt), key = kind + tgt;
+  if (MG.key !== key) { MG.key = key; MG.kind = kind; MG.boost = 0; MG.bt = 0; MG.S = {}; MG.t = 0; MG.fl = 0; mgInit(kind); }
+  MG.t += dt; const st = me.tr && D.treeStats('repair', me.tr.repair), tol = 1 + (st ? st.band || 0 : 0);
+  MGF[kind](g, dt, tol); MG.clk = 0;
+  g.fillStyle = 'rgba(2,6,16,.85)'; g.fillRect(0, 0, MGW, 22); g.fillStyle = '#ffd54a'; g.font = 'bold 13px monospace'; g.fillText(MGN[kind][0], 6, 15);
+  g.fillStyle = '#6df'; g.textAlign = 'right'; g.fillText('bonus +' + round(MG.boost * 100) + '%', MGW - 6, 15); g.textAlign = 'left';
+  g.fillStyle = '#123'; g.fillRect(0, 21, MGW, 3); g.fillStyle = '#6df'; g.fillRect(0, 21, MGW * MG.boost, 3);
+  if ($('mgh').dataset.k !== kind) { $('mgh').dataset.k = kind; $('mgh').textContent = MGN[kind][1]; }
+}
+// build the panel once
+let repBuilt = 0, repKey = '';
+function repBuild() {
+  repBuilt = 1;
+  $('hlist').addEventListener('click', e => { const r = e.target.closest('[data-t]'); if (!r) return; const t = +r.dataset.t; if (r.classList.contains('lock')) { toast('The Repair Bay cannot be repaired by you while it is destroyed. Your crew must click it.', '#f88'); return; } rtSel = rtSel === t ? -1 : t; repKey = ''; SFX.ui && SFX.ui(); });
+  $('hullrow').addEventListener('click', () => { rtSel = rtSel === 18 ? -1 : 18; repKey = ''; SFX.ui && SFX.ui(); });
+  $('drnb').addEventListener('click', () => act('dr'));
+}
+function hcol(f, dn) { return dn ? '#f33' : f < 0.35 ? '#f84' : f < 0.7 ? '#fd4' : '#5f8'; }
 function repPanel(s) {
-  const sh = s.sh, tk = sh.tk, t = tk[0];
+  if (!repBuilt) repBuild();
+  const sh = s.sh, tk = sh.tk, t = tk[0], off = tk[2], mult = tk[3];
+  if (rtSel >= 0 && !rtOK(sh, rtSel) && t < 0) rtSel = -1;
+  const down = !!sh.dn[REPAIR], anyDmg = sh.h < sh.hm - 0.05 || sh.sc.some((v, k) => v >= 0 && (sh.dn[k] || v < 0.995));
   let m;
-  if (sh.dn[REPAIR]) m = '<span class="r">⚠ REPAIR BAY IS DOWN.</span> Hold FIRE to self-patch it; crewmates can press F to help.';
-  else if (t < 0) m = '<span class="g">All sections nominal.</span> ' + (sh.dr.some(d => d) ? 'Drone deployed: it follows your cursor and auto-fires.' : 'Drone launching…');
-  else if (t === 18) m = `Hull at ${round(sh.h / sh.hm * 100)}%. <b>Weld the hull</b>: hold FIRE while the needle is in the green band.`;
-  else m = `${sh.dn[t] ? '<span class="r">⚠ ' + secName(t) + ' is DOWN</span>' : '<b class="y">' + secName(t) + ' damaged</b>'}. <b>Hold FIRE while the needle is inside the green band</b> to recalibrate it (~10s).`;
-  if (repPanel.m !== m) { $('repmsg').innerHTML = m; repPanel.m = m; }
-  const key = sh.dn.join('') + rtSel + t + sh.sc.map(v => v.toFixed(1)).join() + s.mk;
-  if (repPanel.k !== key) { repPanel.k = key; const ids = [0, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17].filter(k => sh.sc[k] >= 0).concat([18]);
-    $('tgts').innerHTML = ids.map(i => { const f = i === 18 ? sh.h / sh.hm : sh.sc[i]; return `<button data-t="${i}" class="${i < 18 && sh.dn[i] ? 'dn' : ''} ${(rtSel === i || (rtSel < 0 && t === i)) ? 'sel' : ''}">${i < 6 ? i + 1 + ' ' : i === 18 ? '0 ' : ''}${i === 18 ? 'Hull' : secShort(i)} ${round(f * 100)}%</button>`; }).join('') + `<button data-t="-1" class="${rtSel < 0 ? 'sel' : ''}">AUTO priority</button>`; $('tgts').querySelectorAll('[data-t]').forEach(b => b.onclick = () => { rtSel = +b.dataset.t; repPanel.k = ''; SFX.ui(); }); }
+  if (down) m = '<span class="r">⚠ YOUR REPAIR BAY IS DESTROYED.</span> You cannot repair ports or launch drones. Your crewmates are clicking it back online (they must repair it).';
+  else if (t < 0) m = anyDmg ? '<b class="y">▶ Click a damaged port below to start repairing it.</b> Repair then runs automatically; the minigame makes it faster.' : '<span class="g">All systems nominal.</span> Repairs start when you click a damaged port.';
+  else m = `Repairing <b class="y">${t === 18 ? 'Hull' : secName(t)}</b> · speed <b class="c">×${mult.toFixed(2)}</b> <small>(minigame up to +100%${off ? ', drone-off +50%' : ''})</small>`;
+  const key = [down, t, off, m, rtSel, sh.h.toFixed(1), sh.hm, sh.sc.map((v, k) => v < 0 ? '-' : round(v * 100) + (sh.dn[k] ? 'd' : '')).join(','), sh.dr.length, s.mk].join('|');
+  if (repKey !== key) {
+    repKey = key; $('repmsg').innerHTML = m;
+    const hf = sh.h / sh.hm; $('hbi').style.width = round(hf * 100) + '%'; $('hbi').style.background = hcol(hf, 0); $('hbt').textContent = round(sh.h) + ' / ' + round(sh.hm) + ' HP';
+    $('hullrow').className = (t === 18 ? 'act ' : '') + (rtSel === 18 ? 'sel' : '') + (hf < 0.995 ? ' dmg' : '');
+    const ids = []; for (let k = 0; k < 18; k++) if (sh.sc[k] >= 0) ids.push(k);
+    $('hlist').innerHTML = ids.map(k => { const f = sh.sc[k], dn = sh.dn[k], dmg = dn || f < 0.995, lock = k === REPAIR && down;
+      return `<div class="hr ${dn ? 'dn' : ''} ${dmg ? 'dmg' : ''} ${rtSel === k ? 'sel' : ''} ${t === k ? 'act' : ''} ${lock ? 'lock' : ''}" data-t="${k}"><span class="hn">${k < 6 ? (k + 1) + ' ' : ''}${secShort(k)}</span><div class="hb"><i style="width:${round(f * 100)}%;background:${hcol(f, dn)}"></i></div><b>${dn ? 'DOWN' : round(f * 100) + '%'}</b><em>${t === k ? 'REPAIRING' : lock ? 'locked' : dmg ? 'click to repair' : ''}</em></div>`; }).join('');
+    const d = $('drnb'); d.disabled = down; d.className = off ? 'off' : '';
+    d.innerHTML = down ? '🛸 Drone unavailable: Repair Bay destroyed' : off ? '🛸 DRONE DISABLED · <b>repairing 50% faster</b><small>click (or G) to launch the drone again</small>' : '🛸 DRONE ACTIVE · <b>click (or G) to DISABLE it: repairs 50% faster</b><small>the drone follows your cursor and shoots, but slows repairs</small>';
+  }
+}
+// ----- the Repair Bay is destroyed: everybody else must click it back -----
+let rapClicks = 0, rapBuilt = 0, rapFixedT = 0;
+function rapHit(e) { if (e && e.preventDefault) e.preventDefault(); rapClicks++; lastAct = performance.now(); const b = $('rapb'); b.classList.add('hit'); clearTimeout(rapHit.t); rapHit.t = setTimeout(() => b.classList.remove('hit'), 70); if (rapHit.n++ % 3 === 0) SFX.ui && SFX.ui(); }
+rapHit.n = 0;
+function rapPanel(s) {
+  const sh = s.sh, show = s.ph === 'mission' && me.role >= 0 && me.role !== REPAIR && sh.dn[REPAIR] === 1;
+  if (!rapBuilt) { rapBuilt = 1; const b = $('rapb'); b.addEventListener('pointerdown', rapHit); b.addEventListener('keydown', e => e.preventDefault()); }
+  const was = !$('rapid').classList.contains('hide'); $('rapid').classList.toggle('hide', !show);
+  if (show) { const f = sh.sc[REPAIR] < 0 ? 0 : sh.sc[REPAIR], sp = clamp(sh.tk[4], 0, 1); $('rapf').style.width = round(f * 100) + '%'; $('rapp').textContent = round(f * 100) + '% repaired'; $('raps').textContent = 'crew repair speed: ' + round(sp * 100) + '% of normal'; $('raps').style.color = sp > 0.85 ? '#6f6' : '#fd4'; $('raphint').textContent = me.role >= 0 && sh.dn[me.role] ? 'Your own station is down too, but you can still help!' : 'Click the button (or tap SPACE) as fast as you can. Every crewmate clicking = full speed.'; }
+  if (was && !show && s.ph === 'mission') { toast('✔ Repair Bay repaired', '#6f6'); }
 }
 
 function engPanel(s) {
@@ -658,16 +849,6 @@ function engPanel(s) {
   $('pips').querySelectorAll('.bars').forEach((b, k) => { if (k > 2) return; b.querySelectorAll('i').forEach((i, j) => i.classList.toggle('on', j < sh.pip[k])); });
   $('thrbar').style.width = (thr * 100) + '%';
   $('thrt').innerHTML = `Throttle ${round(thr * 100)}% · speed ${sh.spd}${sh.dn[ENG] ? ' · <span class="r">ENGINES DOWN: stalling</span>' : ''}${sh.dn[PILOT] ? ' · <span class="r">cockpit down: no steering</span>' : ''}`;
-}
-function drawGauge() {
-  if (me.role !== REPAIR || !lastSnap || lastSnap.ph !== 'mission') return;
-  const c = $('rg'), g = c.getContext('2d'), w = c.width, h = c.height, tk = lastSnap.sh.tk, T = performance.now() / 1000 + offset;
-  g.clearRect(0, 0, w, h); const X = v => (v + 1) / 2 * (w - 20) + 10;
-  g.fillStyle = '#0a1420'; g.fillRect(10, 20, w - 20, 34);
-  if (tk[0] >= 0) { g.fillStyle = 'rgba(60,255,90,.45)'; g.fillRect(X(tk[1] - tk[2]), 20, X(tk[1] + tk[2]) - X(tk[1] - tk[2]), 34); g.strokeStyle = '#6f6'; g.strokeRect(X(tk[1] - tk[2]), 20, X(tk[1] + tk[2]) - X(tk[1] - tk[2]), 34); }
-  const nv = sin(T * 1.7), inb = abs(nv - tk[1]) < tk[2]; g.fillStyle = inb ? '#fff' : '#f84'; g.fillRect(X(nv) - 3, 12, 6, 50);
-  g.fillStyle = '#123'; g.fillRect(10, 70, w - 20, 12); g.fillStyle = '#6df'; g.fillRect(10, 70, (w - 20) * clamp(tk[3], 0, 1), 12);
-  g.fillStyle = '#9ab'; g.font = '16px monospace'; g.fillText(tk[0] < 0 ? 'NO REPAIR NEEDED' : (inb ? 'IN BAND: HOLD FIRE' : 'wait for the band…'), 12, 14);
 }
 function launch() {
   if (joined) return; joined = true; audioInit(); localStorage.setItem('tss_name', $('name').value.trim());
@@ -684,7 +865,7 @@ $('b-inv').onclick = invite; $('b-role').onclick = () => togglePanel('rolesp'); 
 $('b-mute').onclick = () => setMute(!A.muted); $('b-mus').onclick = () => setMusic(!A.music);
 
 // ---------- render ----------
-function resize() { DPR = min(devicePixelRatio || 1, isTouch ? 1.5 : 2); W = innerWidth; H = innerHeight; cv.width = W * DPR; cv.height = H * DPR; Z = clamp(min(W, H) / (isTouch ? 900 : 1150) * (W > H ? 1 : 1.1), 0.3, 1); }
+function resize() { DPR = min(devicePixelRatio || 1, isTouch ? 1.5 : 2); W = innerWidth; H = innerHeight; cv.width = W * DPR; cv.height = H * DPR; Z = clamp(min(W, H) / (isTouch ? 1010 : 1330) * (W > H ? 1 : 1.1), 0.26, 1); }
 addEventListener('resize', resize); resize();
 let lastT = performance.now(), fps = 60, bgPlanet = null;
 function frame(now) {
@@ -694,7 +875,7 @@ function frame(now) {
   for (const [id, b] of bolts) { b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt; if (b.life <= 0) bolts.delete(id); }
   for (let i = floaters.length - 1; i >= 0; i--) { const f = floaters[i]; f.t -= dt; f.y -= 40 * dt; if (f.t <= 0) floaters.splice(i, 1); }
   if (bannerT > 0) { bannerT -= dt; $('banner').style.opacity = min(1, bannerT * 2); } else $('banner').style.opacity = 0;
-  draw(dt, now / 1000); drawGauge();
+  draw(dt, now / 1000); mgFrame(dt);
 }
 requestAnimationFrame(frame);
 function draw(dt, T) {
@@ -717,7 +898,7 @@ function hpBar(x, y, w, f, col) { cx.fillStyle = 'rgba(0,0,0,.6)'; cx.fillRect(x
 function drawWorld(o, T) {
   const s = o.s, sh = o.sh, view = (x, y, r) => abs(x - camX) < W / 2 / Z + r && abs(y - camY) < H / 2 / Z + r;
   // arena edge
-  cx.strokeStyle = 'rgba(255,80,80,.25)'; cx.lineWidth = 6; cx.setLineDash([30, 20]); cx.strokeRect(-3200, -3200, 6400, 6400); cx.setLineDash([]);
+  cx.strokeStyle = 'rgba(255,80,80,.25)'; cx.lineWidth = 6; cx.setLineDash([30, 20]); cx.strokeRect(-ARENA, -ARENA, ARENA * 2, ARENA * 2); cx.setLineDash([]);
   // escort jump point
   if (s.mi && s.mi.type === 'escort' && s.ph === 'mission') { const x = s.mi.jx, y = s.mi.jy; for (let i = 0; i < 4; i++) { cx.strokeStyle = `rgba(120,190,255,${0.5 - i * 0.1})`; cx.lineWidth = 4; cx.beginPath(); cx.arc(x, y, 50 + i * 18 + sin(T * 3 + i) * 6, T * (1 + i * 0.3), T * (1 + i * 0.3) + PI * 1.4); cx.stroke(); } cx.fillStyle = '#9cf'; cx.font = 'bold 16px monospace'; cx.textAlign = 'center'; cx.fillText('JUMP POINT', x, y - 100); }
   // pickups
@@ -751,7 +932,8 @@ function drawWorld(o, T) {
     else if (p.k === 1) { cx.globalAlpha = f; cx.strokeStyle = p.c; cx.lineWidth = p.w * f + 0.5; cx.beginPath(); cx.arc(p.x, p.y, lerp(p.r1, p.r0, f), 0, TAU); cx.stroke(); }
     else if (p.k === 2) { cx.globalAlpha = f; const r = p.r * (1.2 - f * 0.4); cx.drawImage(glow(p.c === '#fff' ? '#ffffff' : p.c, 64), p.x - r, p.y - r, r * 2, r * 2); }
     else if (p.k === 3) { cx.globalAlpha = f * 0.5; cx.fillStyle = p.c; cx.beginPath(); cx.arc(p.x, p.y, p.s * (1.6 - f), 0, TAU); cx.fill(); }
-    else if (p.k === 4) { cx.globalAlpha = f; cx.save(); cx.translate(p.x, p.y); cx.rotate(p.a); cx.fillStyle = p.c; cx.fillRect(-p.s, -p.s / 3, p.s * 2, p.s / 1.5); cx.restore(); }
+    else if (p.k === 4) { cx.globalAlpha = f; cx.save(); cx.translate(p.x, p.y); cx.rotate(p.a); cx.fillStyle = p.c; cx.beginPath(); cx.moveTo(p.s, 0); cx.lineTo(-p.s * 0.7, -p.s * 0.6); cx.lineTo(-p.s, p.s * 0.3); cx.closePath(); cx.fill(); cx.strokeStyle = 'rgba(255,200,120,.7)'; cx.lineWidth = 0.8; cx.stroke(); cx.restore(); }
+    else if (p.k === 6) { cx.globalAlpha = f; cx.strokeStyle = p.c; cx.lineWidth = p.s; cx.lineCap = 'round'; cx.beginPath(); cx.moveTo(p.x, p.y); cx.lineTo(p.x - p.vx * 0.045, p.y - p.vy * 0.045); cx.stroke(); cx.lineCap = 'butt'; }
     else if (p.k === 5) { cx.globalAlpha = f; const r = p.s * (1.5 - f * 0.5); cx.drawImage(glow(f > 0.6 ? '#ffd890' : f > 0.3 ? '#ff7a2a' : '#7a2a10', 64), p.x - r, p.y - r, r * 2, r * 2); } }
   cx.globalAlpha = 1;
   for (const f of floaters) { cx.globalAlpha = min(1, f.t * 2); cx.fillStyle = f.c; cx.font = 'bold 15px monospace'; cx.textAlign = 'center'; cx.fillText(f.s, f.x, f.y); } cx.globalAlpha = 1;
@@ -857,6 +1039,11 @@ function drawEnemyFire(o, view) {
 function drawPlayerShots(o) {
   for (const p of o.pp) { if (p[4]) { streak(p[1], p[2], p[3], 12, 2, PLAYER_RED, 12); P({ k: 0, x: p[1], y: p[2], vx: 0, vy: 0, life: 0.2, max: 0.2, s: 2, c: '#ff6050' }); } else { cx.save(); cx.translate(p[1], p[2]); cx.rotate(p[3]); cx.fillStyle = '#ccc'; cx.fillRect(-6, -2, 12, 4); cx.fillStyle = '#f22'; cx.fillRect(4, -2, 3, 4); cx.restore(); cx.drawImage(glow('#ff2a2a', 16), p[1] - cos(p[3]) * 8 - 16, p[2] - sin(p[3]) * 8 - 16); P({ k: 3, x: p[1] - cos(p[3]) * 8, y: p[2] - sin(p[3]) * 8, vx: 0, vy: 0, life: 0.5, max: 0.5, s: 5, c: '#633' }); } }
 }
+function hudBar(x, y, w, h, f, col, bg) {
+  f = clamp(f, 0, 1); cx.fillStyle = bg; cx.fillRect(x, y, w, h); cx.fillStyle = col; cx.fillRect(x, y, w * f, h);
+  const g = cx.createLinearGradient(0, y, 0, y + h); g.addColorStop(0, 'rgba(255,255,255,.5)'); g.addColorStop(0.5, 'rgba(255,255,255,0)'); g.addColorStop(1, 'rgba(0,0,0,.45)'); cx.fillStyle = g; cx.fillRect(x, y, w * f, h);
+  cx.fillStyle = 'rgba(0,0,0,.4)'; for (let i = 1; i < 10; i++) cx.fillRect(x + w * i / 10, y, 1, h); cx.strokeStyle = 'rgba(160,210,240,.5)'; cx.lineWidth = 1; cx.strokeRect(x + 0.5, y + 0.5, w - 1, h - 1);
+}
 function drawHUD(o, T) {
   const s = o.s, sh = o.sh; if (s.ph !== 'mission') return;
   const ind = (x, y, col, sz) => { const dx = x - camX, dy = y - camY, hw = W / 2 / Z, hh = H / 2 / Z; if (abs(dx) < hw && abs(dy) < hh) return; const a = atan2(dy, dx), k = min((W / 2 - 24) / abs(cos(a) || 1e-6), (H / 2 - 24) / abs(sin(a) || 1e-6)); const px = W / 2 + cos(a) * k, py = H / 2 + sin(a) * k; cx.save(); cx.translate(px, py); cx.rotate(a); cx.fillStyle = col; cx.beginPath(); cx.moveTo(sz, 0); cx.lineTo(-sz * 0.6, -sz * 0.6); cx.lineTo(-sz * 0.6, sz * 0.6); cx.closePath(); cx.fill(); cx.restore(); };
@@ -866,12 +1053,13 @@ function drawHUD(o, T) {
   for (const p of o.pk) if (p[3]) ind(p[1], p[2], '#6df', 8);
   const bw = min(230, W * 0.32), bx = 12, by = H - (isTouch ? 230 : 96);
   cx.textAlign = 'left'; cx.font = 'bold 11px monospace';
+  { const g_ = cx.createLinearGradient(0, by - 22, 0, by + 86); g_.addColorStop(0, 'rgba(14,26,44,.62)'); g_.addColorStop(1, 'rgba(4,8,16,.5)'); cx.fillStyle = g_; cx.fillRect(bx - 8, by - 22, bw + 16, 110); cx.strokeStyle = 'rgba(110,170,230,.45)'; cx.lineWidth = 1; cx.strokeRect(bx - 7.5, by - 21.5, bw + 15, 109); cx.fillStyle = 'rgba(110,170,230,.8)'; for (const [qx, qy] of [[bx - 8, by - 22], [bx + bw + 8, by - 22], [bx - 8, by + 88], [bx + bw + 8, by + 88]]) cx.fillRect(qx - 2, qy - 2, 4, 4); }
   cx.fillStyle = '#cde'; cx.fillText(`HULL ${sh.h.toFixed(1)}/${sh.hm}`, bx, by - 4);
-  cx.fillStyle = 'rgba(0,30,40,.7)'; cx.fillRect(bx, by, bw, 10); cx.fillStyle = sh.h / sh.hm < 0.35 ? '#f44' : '#8ff'; cx.fillRect(bx, by, bw * sh.h / sh.hm, 10);
+  hudBar(bx, by, bw, 10, sh.h / sh.hm, sh.h / sh.hm < 0.35 ? '#f44' : '#8ff', 'rgba(0,30,40,.75)');
   const down = sh.shd > 0 || sh.shp <= 0;
   cx.fillStyle = down ? '#f88' : '#7ab8ff'; cx.fillText(down ? `SHIELD DOWN · ${Math.ceil(sh.shd)}s` : `SHIELD ${sh.shp.toFixed(1)}/${sh.shm.toFixed(1)} · ${sh.arc}° arc`, bx, by + 20);
-  cx.fillStyle = 'rgba(0,20,50,.7)'; cx.fillRect(bx, by + 24, bw, 10); cx.fillStyle = down ? '#a44' : '#4aa8ff'; cx.fillRect(bx, by + 24, bw * (down ? 1 - sh.shd / 20 : clamp(sh.shp / sh.shm, 0, 1)), 10);
-  cx.fillStyle = '#ffd54a'; cx.fillText(`ENERGY ${sh.en}/${sh.em}`, bx, by + 48); cx.fillStyle = 'rgba(40,40,0,.7)'; cx.fillRect(bx, by + 52, bw, 8); cx.fillStyle = '#ffd54a'; cx.fillRect(bx, by + 52, bw * sh.en / sh.em, 8);
+  hudBar(bx, by + 24, bw, 10, down ? 1 - sh.shd / 20 : clamp(sh.shp / sh.shm, 0, 1), down ? '#a44' : '#4aa8ff', 'rgba(0,20,50,.75)');
+  cx.fillStyle = '#ffd54a'; cx.fillText(`ENERGY ${sh.en}/${sh.em}`, bx, by + 48); hudBar(bx, by + 52, bw, 8, sh.en / sh.em, '#ffd54a', 'rgba(40,40,0,.75)');
   cx.fillStyle = '#9ab'; cx.fillText(isTouch ? `SPD ${sh.spd}` : `SPD ${sh.spd} · THR ${round(sh.thr * 100)}% · PWR E${sh.pip[0]} W${sh.pip[1]} S${sh.pip[2]}`, bx, by + 76);
   // ship schematic: every section, extra ports included
   const scx = W - 74, scy = isTouch ? 300 : 124, G = GEO[s.mk], K_ = 0.6;

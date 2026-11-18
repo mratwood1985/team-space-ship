@@ -1,7 +1,10 @@
 // Team Space Ship v3: shared game data for the server (require) and the client (window.DEFS)
 (function (root) {
 const PI = Math.PI;
-const VERSION = 3;
+const VERSION = 4;
+const ARENA = 4200;                       // half-size of the mission map (v4: was 3200)
+const EFIRE_WEAK_LV = 5, EFIRE_WEAK = 0.6; // enemy fire does 60% damage on mission levels 1-5, full from level 6
+const REPAIR_CFG = { base: 20, drone: 1.5, mgMax: 1.0, clickDiv: 300, botCps: 1.5 }; // repair: base seconds per section, drone-off speed multiplier, minigame max bonus, click strength on the Repair Bay
 const ROLES = ['pilot', 'gunR', 'repair', 'engineer', 'shield', 'gunL'];
 const RNAME = ['PILOT', 'STARBOARD GUNNER', 'REPAIR / DRONE', 'ENGINEER', 'SHIELDS', 'PORT GUNNER'];
 const RSHORT = ['PLT', 'GUN-S', 'RPR', 'ENG', 'SHD', 'GUN-P'];
@@ -40,8 +43,8 @@ const FX = {
   speed: ['top speed', '%'], regen: ['energy regen', '%'], emax: ['max energy', 'n'], pipEff: ['power-routing strength', '%'], limp: ['thrust kept when engines are down', 'p'],
   ram: ['afterburner ramming', 'b'], bombDmg: ['bomb damage', '%'], bombRad: ['bomb radius', '%'], burn: ['s afterburner', 's'], rrBoost: ['reroute bonus', '%'], split: ['reroute feeds both gunners', 'b'],
   shHp: ['shield hit points', 'n'], shRegen: ['shield HP/s regen', 'n'], shArc: ['° shield arc', 'n'], shSpin: ['shield turn speed', '%'], absorb: ['energy from blocks', '%'], reflect: ['chance blocked shots reflect', 'p'], lanceDmg: ['Shield Lance damage', '%'],
-  rep: ['repair speed', '%'], dDmg: ['drone damage', '%'], dHp: ['drone armor', 'n'], dRate: ['drone fire rate', '%'], hullRegen: ['hull/s regen', 'n'], selfPatch: ['crew self-patch speed', '%'],
-  magnet: ['pickup magnet range', '%'], emerg: ['downed sections restart at', 'p'], drones: ['extra drone', 'n'], dMsl: ['drone homing missiles', 'b'], portHp: ['HP on every section', 'n'], band: ['wider repair band', '%'],
+  rep: ['automatic repair speed', '%'], dDmg: ['drone damage', '%'], dHp: ['drone armor', 'n'], dRate: ['drone fire rate', '%'], hullRegen: ['hull/s regen', 'n'], selfPatch: ['crew click-repair strength on the Repair Bay', '%'],
+  magnet: ['pickup magnet range', '%'], emerg: ['downed sections restart at', 'p'], drones: ['extra drone', 'n'], dMsl: ['drone homing missiles', 'b'], portHp: ['HP on every section', 'n'], band: ['repair minigame tolerance', '%'],
   buff: ['s on your crew buffs', 's'], cdr: ['ability cooldowns', 'c'],
 };
 function fxText(fx) {
@@ -166,6 +169,32 @@ function treeStats(treeKey, P) {
   if (o.cdr) o.cdr = Math.min(0.5, o.cdr);
   return o;
 }
+
+// ---------- upgrade text: every upgrade states what it changes, current -> next ----------
+// base value of a stat before any upgrade (some depend on the ship Mk); u = unit label, d = decimals
+const ABS = {
+  hull: { b: mk => 40 + 12 * mk, u: '', d: 0 }, emax: { b: () => 100, u: '', d: 0 }, shHp: { b: () => 4, u: ' HP', d: 1 }, shArc: { b: () => SHIELD_ARC0, u: '°', d: 0, max: SHIELD_ARC_MAX },
+  pd: { b: () => 12, u: ' px', d: 0 }, arcG: { b: () => 110, u: '°', d: 0 }, pierce: { b: () => 0, u: '', d: 0 }, nPierce: { b: () => 0, u: '', d: 0 }, rollInv: { b: () => 0.7, u: ' s', d: 1 },
+  burn: { b: () => 2.5, u: ' s', d: 1 }, drones: { b: () => 1, u: '', d: 0 }, dHp: { b: () => 3, u: ' HP', d: 0 }, portHp: { b: () => 3, u: ' HP', d: 1 }, buff: { b: () => 5, u: ' s', d: 0 },
+};
+// multiplicative stats with a known base: [base, unit]
+const ABSX = { nDmg: [1.6, ' dmg'], dmg: [1.6, ' dmg'], nRate: [2.6, ' shots/s'], rof: [2.8, ' shots/s'], speed: [185, ' top speed'], nRange: [600, ' px'], regen: [1, 'x regen'], turn: [1.7, ' rad/s'] };
+function fmtN(v, d) { return (+v.toFixed(d)).toString(); }
+// one line: "Turret damage 1.6 -> 1.9 dmg (+20% -> +40%)". cur = total bonus now, add = what this upgrade adds
+function statLine(k, cur, add, mk) {
+  const L = FX[k] || [k, 'n'], name = L[0].replace(/^s /, '').replace(/^px /, '').replace(/^° /, ''), c2 = cur + add, ar = ' \u2192 ';
+  const pc = v => (v >= 0 ? '+' : '') + Math.round(v * 100) + '%';
+  if (L[1] === 'b') return name + ': ' + (cur ? 'on' : 'off') + ar + 'on';
+  if (ABS[k]) { const a = ABS[k], b0 = a.b(mk || 0), x = b0 + cur, y = Math.min(a.max || 1e9, b0 + c2); return name + ': ' + fmtN(x, a.d) + a.u + ar + fmtN(y, a.d) + a.u + (a.max && x >= a.max ? ' (max)' : ''); }
+  if (ABSX[k] && L[1] === '%') { const a = ABSX[k], b0 = a[0] * (k === 'speed' ? (1 - 0.06 * (mk || 0)) : 1); return name + ': ' + fmtN(b0 * (1 + cur), 2) + ar + fmtN(b0 * (1 + c2), 2) + a[1] + ' (' + pc(cur) + ar + pc(c2) + ')'; }
+  if (L[1] === '%') return name + ': ' + pc(cur) + ar + pc(c2);
+  if (L[1] === 'p') return name + ': ' + Math.round(cur * 100) + '%' + ar + Math.round(c2 * 100) + '%';
+  if (L[1] === 'c') return name + ': -' + Math.round(cur * 100) + '%' + ar + '-' + Math.round(Math.min(0.5, c2) * 100) + '%' + (c2 > 0.5 ? ' (max -50%)' : '');
+  if (L[1] === 's') return name + ': +' + fmtN(cur, 2) + ' s' + ar + '+' + fmtN(c2, 2) + ' s';
+  return name + ': +' + fmtN(cur, 2) + ar + '+' + fmtN(c2, 2);
+}
+// all the lines for an upgrade adding fx to a profile tree P (P = {path,i,b}); one-time nodes and big purchases pass their fx, infinite upgrades pass {stat: per}
+function fxLines(treeKey, P, fx, mk) { const cur = treeStats(treeKey, P); return Object.keys(fx).map(k => statLine(k, cur[k] || 0, fx[k], mk)); }
 function infCap(treeKey, id, lv) { return treeKey === 'shield' && id === 'i_arc' ? lv >= (SHIELD_ARC_MAX - SHIELD_ARC0) / 5 : false; }
 
 const BOT_PORTS = [['twin', 'rockets'], ['rockets', 'beam'], ['drone2', 'sdrone'], ['aux', 'mines'], ['capbank', 'rear'], ['scatter', 'rockets']];
@@ -223,7 +252,7 @@ const PLANET_A = ['Kor', 'Vel', 'Tha', 'Ix', 'Mor', 'Zan', 'Dra', 'Cyr', 'Ul', '
 const PLANET_B = ['a', 'o', 'u', 'e', 'i', 'ae', 'ou', 'y'];
 const PLANET_C = ['lis', 'thar', 'nox', 'ria', 'dor', 'vex', ' Prime', 'mir', 'ten', 'gar', 'phos', ' IV', ' VII', 'lune', 'kesh', 'tura', 'zan'];
 const PLANET_K = ['rocky', 'ice', 'lava', 'ocean', 'gas', 'desert', 'toxic', 'jungle', 'storm', 'moon', 'ringed', 'city'];
-const out = { VERSION, ROLES, RNAME, RSHORT, PORT_NAMES, TREE_OF, NODE_COST, infCost, PORT_COST, portUpCost, PORT_MAX_LV, MK_COST, MK_NAMES, CORE_RATE, SHIELD_ARC0, SHIELD_ARC_MAX, SHIELD_DOWN,
+const out = { VERSION, ARENA, EFIRE_WEAK_LV, EFIRE_WEAK, REPAIR_CFG, ABS, ABSX, statLine, fxLines, ROLES, RNAME, RSHORT, PORT_NAMES, TREE_OF, NODE_COST, infCost, PORT_COST, portUpCost, PORT_MAX_LV, MK_COST, MK_NAMES, CORE_RATE, SHIELD_ARC0, SHIELD_ARC_MAX, SHIELD_DOWN,
   GEO, secIdx, FX, fxText, ABIL, INNATE, TREES, pyrAllowed, treeStats, infCap, BOT_PORTS, BOT_PATH, DIFFS, MTYPES, WEAP, ETYPES, PLANET_A, PLANET_B, PLANET_C, PLANET_K };
 if (typeof module !== 'undefined' && module.exports) module.exports = out; else root.DEFS = out;
 })(this);

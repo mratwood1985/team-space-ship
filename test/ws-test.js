@@ -1,9 +1,9 @@
-// v3 WebSocket integration test: rooms, bots, weighted voting, full mission -> upgrade -> ready loop, abilities,
+// v4 WebSocket integration test: rooms, bots, weighted voting, full mission -> upgrade -> ready loop, abilities,
 // skill-pyramid rules, permanent ports, Mk upgrades + core conversion, independent shield aim, enemy shields/docks.
 // Checks that need credits/cores/spawns use the dev hooks and run only when the server was started with DEV_TOOLS=1 (auto-detected).
 const WebSocket = require('ws');
 const D = require('../public/defs.js');
-const BASE = process.argv[2] || 'http://localhost:8080';
+const BASE = process.argv[2] || 'http://localhost:8091';
 const wsUrl = BASE.replace(/^http/, 'ws') + '/ws';
 const sleep = ms => new Promise(r => setTimeout(r, ms));
 function client(room, name, role) {
@@ -18,7 +18,7 @@ function client(room, name, role) {
 async function until(fn, ms) { const d = Date.now() + ms; while (Date.now() < d) { if (fn()) return true; await sleep(200); } return false; }
 (async () => {
   let ok = true; const check = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!cond) ok = false; };
-  const h0 = await (await fetch(BASE + '/health')).json(); console.log('health', h0); check(h0.v === D.VERSION && D.VERSION === 3, 'health reports v3');
+  const h0 = await (await fetch(BASE + '/health')).json(); console.log('health', h0); check(h0.v === D.VERSION && D.VERSION === 4, 'health reports v4');
   const t0 = Date.now(); const a = await client('', 'Alice', 0); check(a.me.role === 0 && a.me.pub, `public join as Pilot in ${Date.now() - t0}ms (room ${a.me.code})`);
   await sleep(2500);
   check(a.snaps > 25, `snapshots streaming: ${a.snaps} in 2.5s`);
@@ -107,7 +107,7 @@ async function until(fn, ms) { const d = Date.now() + ms; while (Date.now() < d)
   check((a.evs.b || 0) > 20, `lasers fired (public): ${a.evs.b}`); check((a.evs.boom || 0) > 3, `explosions: ${a.evs.boom}`);
   console.log('private event counts:', JSON.stringify(b.evs));
   d.ws.close(); await sleep(800); check(c.last.crew[4][1] === 1, 'Dan left -> bot took the Shield seat');
-  const h = await (await fetch(BASE + '/health')).json(); console.log('health', h); check(h.v === 3, 'health reports v3');
+  const h = await (await fetch(BASE + '/health')).json(); console.log('health', h); check(h.v === 4, 'health reports v4');
   a.ws.close(); b.ws.close(); c.ws.close();
   console.log(ok ? 'ALL TESTS PASSED' : 'SOME TESTS FAILED'); process.exit(ok ? 0 : 1);
 })().catch(e => { console.error(e); process.exit(1); });
