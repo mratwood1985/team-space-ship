@@ -1,10 +1,16 @@
-// Team Space Ship v3: shared game data for the server (require) and the client (window.DEFS)
+// Team Space Ship v5: shared game data for the server (require) and the client (window.DEFS)
 (function (root) {
 const PI = Math.PI;
-const VERSION = 4;
+const VERSION = 5;
 const ARENA = 4200;                       // half-size of the mission map (v4: was 3200)
 const EFIRE_WEAK_LV = 5, EFIRE_WEAK = 0.6; // enemy fire does 60% damage on mission levels 1-5, full from level 6
 const REPAIR_CFG = { base: 20, drone: 1.5, mgMax: 1.0, clickDiv: 300, botCps: 1.5 }; // repair: base seconds per section, drone-off speed multiplier, minigame max bonus, click strength on the Repair Bay
+const MONEY_MULT = 1.1;                   // v5: about 10% more credits for everyone
+// v5 power rerouting (Engineer): 10 slots in total over 4 options. Drain per second = base * DRAIN[slots used]; the generator regenerates `base` per second at the start (= exactly 1 slot).
+const RR_CFG = { max: 10, base: 2.0, drain: [0, 1, 1.08, 1.2, 1.38, 1.6, 1.9, 2.3, 2.8, 3.4, 4.0], regenCap: 3.0, lock: 20, lockThr: 0.25,
+  eng: 0.015, acc: 0.08, wpn: 0.05, shd: 0.10, rep: 0.03 };    // per slot: top speed, throttle response, gun fire rate, shield recharge speed, repair speed
+const RR_NAMES = ['ENGINES', 'WEAPONS', 'SHIELDS', 'REPAIR'];
+const BOMB_CFG = { cd: 12, rad: 150, dmg: 10 };
 const ROLES = ['pilot', 'gunR', 'repair', 'engineer', 'shield', 'gunL'];
 const RNAME = ['PILOT', 'STARBOARD GUNNER', 'REPAIR / DRONE', 'ENGINEER', 'SHIELDS', 'PORT GUNNER'];
 const RSHORT = ['PLT', 'GUN-S', 'RPR', 'ENG', 'SHD', 'GUN-P'];
@@ -40,8 +46,8 @@ const FX = {
   graze: ['chance a hit becomes a graze', 'p'], crewRof: ['fire rate for the whole crew', '%'], hull: ['max hull', 'n'], rollInv: ['s of roll invulnerability', 's'],
   dmg: ['turret damage', '%'], rof: ['turret fire rate', '%'], slew: ['turret rotation', '%'], range: ['turret range', '%'], pierce: ['turret pierce', 'n'], pd: ['px point-defense radius', 'n'],
   arcG: ['° turret arc', 'n'], sBreak: ['damage to enemy shields', '%'], crit: ['crit chance (x2 dmg)', 'p'],
-  speed: ['top speed', '%'], regen: ['energy regen', '%'], emax: ['max energy', 'n'], pipEff: ['power-routing strength', '%'], limp: ['thrust kept when engines are down', 'p'],
-  ram: ['afterburner ramming', 'b'], bombDmg: ['bomb damage', '%'], bombRad: ['bomb radius', '%'], burn: ['s afterburner', 's'], rrBoost: ['reroute bonus', '%'], split: ['reroute feeds both gunners', 'b'],
+  speed: ['top speed', '%'], regen: ['power generator output', '%'], emax: ['power generator capacity', 'n'], pipEff: ['rerouting strength (every slot)', '%'], limp: ['thrust kept when engines are down', 'p'],
+  ram: ['afterburner ramming', 'b'], bombDmg: ['bomb damage', '%'], bombRad: ['bomb radius', '%'], bombCd: ['bomb cooldown', 'c'], bombN: ['extra bomb per throw', 'n'], burn: ['s afterburner', 's'],
   shHp: ['shield hit points', 'n'], shRegen: ['shield HP/s regen', 'n'], shArc: ['° shield arc', 'n'], shSpin: ['shield turn speed', '%'], absorb: ['energy from blocks', '%'], reflect: ['chance blocked shots reflect', 'p'], lanceDmg: ['Shield Lance damage', '%'],
   rep: ['automatic repair speed', '%'], dDmg: ['drone damage', '%'], dHp: ['drone armor', 'n'], dRate: ['drone fire rate', '%'], hullRegen: ['hull/s regen', 'n'], selfPatch: ['crew click-repair strength on the Repair Bay', '%'],
   magnet: ['pickup magnet range', '%'], emerg: ['downed sections restart at', 'p'], drones: ['extra drone', 'n'], dMsl: ['drone homing missiles', 'b'], portHp: ['HP on every section', 'n'], band: ['repair minigame tolerance', '%'],
@@ -62,7 +68,6 @@ function fxText(fx) {
 const ABIL = {
   roll: { n: 'Barrel Roll', cd: 10, d: '0.7s invulnerable sidestep roll' },
   rapid: { n: 'Rapid Fire', cd: 14, d: 'Turret fires 2x faster for 2.5s' },
-  reroute: { n: 'Reroute Power', cd: 16, buff: 1, d: 'CREW BUFF: 50% engine power to the gunner on your cursor side: +50% fire rate & turret turn, +30% damage for 5s (ship slows)' },
   fortify: { n: 'Fortify', cd: 18, d: 'Shield takes half damage for 4s' },
   weld: { n: 'Spot Weld', cd: 14, d: 'Instantly restore 1 HP to your current repair target' },
   volley: { n: 'Lock-On Volley', cd: 14, d: '6 homing red darts at nearby enemies' },
@@ -71,7 +76,7 @@ const ABIL = {
   overcharge: { n: 'Overcharge', cd: 16, d: '+60% turret damage for 4s' },
   paint: { n: 'Target Paint', cd: 18, buff: 1, d: 'CREW BUFF: enemy nearest your cursor takes +50% damage from everyone for 6s' },
   burner: { n: 'Afterburner', cd: 12, d: '+80% speed for 2.5s' },
-  bomb: { n: 'Proton Bomb', cd: 14, d: 'Lob a bomb at your cursor: big blast that erases enemy shots' },
+  bomb: { n: 'Proton Bomb', cd: 12, d: 'Lob a bomb at your cursor: big blast that erases enemy shots. Own cooldown, costs no ship energy' },
   bubble: { n: 'Barrier Bubble', cd: 20, d: 'Full 360° shield for 2s (costs shield HP per block as normal)' },
   lance: { n: 'Shield Lance', cd: 25, d: 'FIRE THE SHIELD as a blue shock-wave along your aim. Damage grows with remaining shield HP. The shield then drops for its 20s recharge' },
   vent: { n: 'Energy Vent', cd: 15, d: 'Turn 1 shield HP into +35 ship energy' },
@@ -94,7 +99,7 @@ const ABIL = {
   swarm: { n: 'Drone Swarm', cd: 32, d: '3 temporary attack drones for 8s' },
   medic: { n: 'Field Medic', cd: 34, buff: 1, d: 'CREW BUFF: stim every station for 4s' },
 };
-const INNATE = { pilot: 'roll', gun: 'rapid', engineer: 'reroute', shield: 'fortify', repair: 'weld' };
+const INNATE = { pilot: 'roll', gun: 'rapid', engineer: 'bomb', shield: 'fortify', repair: 'weld' };
 
 // ---------- skill pyramids: rows of 6,5,4,3,2. A pick in row r allows only the adjacent nodes [i-1, i] of row r+1 ----------
 // node: [id, name, fx, ability?]. Edge nodes of rows 1-4 get +25% effect (they lead to only one choice). Row 5 = capstones.
@@ -120,12 +125,12 @@ const TREES = {
     ports: [['rockets', 'Rocket Turret', 'Slow homing red-glow rockets with splash, fire with your guns'], ['beam', 'Beam Turret', 'Continuous red beam: short range, ignores shot speed'], ['scatter', 'Scatter Turret', '5-bolt red spread, shorter range']] },
   engineer: { name: 'Engineering', rows: [
     [N('e_limp', 'Limp Mode', { limp: 0.35 }), N('e_turbine', 'Tuned Turbines', { speed: 0.12 }), N('e_reactor', 'Reactor Tuning', { regen: 0.3 }), N('e_conduit', 'Power Conduits', { pipEff: 0.3 }), N('e_caps', 'Capacitor Banks', { emax: 30 }), N('e_demo', 'Demolitions', { bombDmg: 0.3 })],
-    [N('e_burn', 'Afterburner', {}, 'burner'), N('e_ram', 'Ram Plating', { ram: 1 }), N('e_bomb', 'Proton Bomb', {}, 'bomb'), N('e_relay', 'Quick Relays', { cdr: 0.15 }), N('e_ovl', 'Overload Relay', { rrBoost: 0.3 })],
-    [N('e_damp', 'Inertial Dampers', { burn: 1, speed: 0.08 }), N('e_split', 'Split Feed', { split: 1 }), N('e_cluster', 'Cluster Payload', { bombRad: 0.3, bombDmg: 0.2 }), N('e_fusion', 'Fusion Core', { regen: 0.3, emax: 20 })],
+    [N('e_burn', 'Afterburner', {}, 'burner'), N('e_ram', 'Ram Plating', { ram: 1 }), N('e_bomb', 'Bomb Fuses', { bombCd: 0.2, bombRad: 0.15 }), N('e_relay', 'Quick Relays', { cdr: 0.15 }), N('e_ovl', 'Overload Relay', { pipEff: 0.25 })],
+    [N('e_damp', 'Inertial Dampers', { burn: 1, speed: 0.08 }), N('e_split', 'Twin Bombs', { bombN: 1 }), N('e_cluster', 'Cluster Payload', { bombRad: 0.3, bombDmg: 0.2 }), N('e_fusion', 'Fusion Core', { regen: 0.3, emax: 20 })],
     [N('e_warp', 'Micro-Jump', {}, 'warp'), N('e_seismic', 'Seismic Charge', {}, 'seismic'), N('e_surge', 'Power Surge', {}, 'surge')],
     [N('e_hyper', 'Hyperdrive Core', { speed: 0.2, regen: 0.5, pipEff: 0.3 }), N('e_master', 'Master Engineer', { cdr: 0.25, buff: 3, bombDmg: 0.4 })]],
-    inf: [['i_speed', 'Injector Tune', 'speed', 0.015], ['i_regen', 'Reactor Trim', 'regen', 0.03], ['i_cdr', 'Relay Trim', 'cdr', 0.01]],
-    big: [['b_armor', 'Armored Nacelles', 'Engine section +1 HP', 450, 0, {}], ['b_hyper', 'Hyper Reactor', '+40 max energy, +40% regen', 800, 1, { emax: 40, regen: 0.4 }]],
+    inf: [['i_speed', 'Injector Tune', 'speed', 0.015], ['i_regen', 'Reactor Trim', 'regen', 0.03], ['i_bomb', 'Bomb Charges', 'bombDmg', 0.03]],
+    big: [['b_armor', 'Armored Nacelles', 'Engine section +1 HP', 450, 0, {}], ['b_hyper', 'Hyper Reactor', '+40 generator capacity, +40% generator output', 800, 1, { emax: 40, regen: 0.4 }]],
     ports: [['mines', 'Mine Layer', 'Drops a proximity mine behind the ship every 3.5s'], ['tractor', 'Tractor Beam', 'Pulls credits and cores in from 2.5x farther'], ['aux', 'Aux Reactor', '+35% energy regen, +25 max energy']] },
   shield: { name: 'Shields', rows: [
     [N('s_hard', 'Hardened Field', { shHp: 2 }), N('s_emit', 'Fast Emitters', { shSpin: 0.4 }), N('s_absorb', 'Absorber', { absorb: 0.5 }), N('s_regen', 'Field Regen', { shRegen: 0.15 }), N('s_wide', 'Wide Emitter', { shArc: 10 }), N('s_mirror', 'Reflector Plating', { reflect: 0.1 })],
@@ -178,7 +183,7 @@ const ABS = {
   burn: { b: () => 2.5, u: ' s', d: 1 }, drones: { b: () => 1, u: '', d: 0 }, dHp: { b: () => 3, u: ' HP', d: 0 }, portHp: { b: () => 3, u: ' HP', d: 1 }, buff: { b: () => 5, u: ' s', d: 0 },
 };
 // multiplicative stats with a known base: [base, unit]
-const ABSX = { nDmg: [1.6, ' dmg'], dmg: [1.6, ' dmg'], nRate: [2.6, ' shots/s'], rof: [2.8, ' shots/s'], speed: [185, ' top speed'], nRange: [600, ' px'], regen: [1, 'x regen'], turn: [1.7, ' rad/s'] };
+const ABSX = { nDmg: [1.6, ' dmg'], dmg: [1.6, ' dmg'], nRate: [2.6, ' shots/s'], rof: [2.8, ' shots/s'], speed: [185, ' top speed'], nRange: [600, ' px'], bombDmg: [10, ' dmg'], bombRad: [150, ' px radius'], regen: [1, 'x output'], turn: [1.7, ' rad/s'] };
 function fmtN(v, d) { return (+v.toFixed(d)).toString(); }
 // one line: "Turret damage 1.6 -> 1.9 dmg (+20% -> +40%)". cur = total bonus now, add = what this upgrade adds
 function statLine(k, cur, add, mk) {
@@ -206,6 +211,7 @@ const MTYPES = {
   escort: { n: 'Escort the Convoy', d: 'Keep the freighters alive until they reach the jump point' },
   station: { n: 'Destroy the Enemy Station', d: 'Break its shield, knock out every battery and hangar, then clear the area' },
   defend: { n: 'Defend the Station', d: 'Hold off the waves attacking the friendly station' },
+  passengers: { n: 'Passenger Run', d: 'Thread the long asteroid field to the far end, pick up the passengers and bring them back to the start' },
   flagship: { n: 'Flagship Assault', d: 'Fight through the escorts, then destroy every port on the flagship' },
 };
 // enemy weapons. ALL enemy fire glows neon green. t: 0 laser, 1 missile, 2 flak. sd = damage to the player shield
@@ -252,7 +258,7 @@ const PLANET_A = ['Kor', 'Vel', 'Tha', 'Ix', 'Mor', 'Zan', 'Dra', 'Cyr', 'Ul', '
 const PLANET_B = ['a', 'o', 'u', 'e', 'i', 'ae', 'ou', 'y'];
 const PLANET_C = ['lis', 'thar', 'nox', 'ria', 'dor', 'vex', ' Prime', 'mir', 'ten', 'gar', 'phos', ' IV', ' VII', 'lune', 'kesh', 'tura', 'zan'];
 const PLANET_K = ['rocky', 'ice', 'lava', 'ocean', 'gas', 'desert', 'toxic', 'jungle', 'storm', 'moon', 'ringed', 'city'];
-const out = { VERSION, ARENA, EFIRE_WEAK_LV, EFIRE_WEAK, REPAIR_CFG, ABS, ABSX, statLine, fxLines, ROLES, RNAME, RSHORT, PORT_NAMES, TREE_OF, NODE_COST, infCost, PORT_COST, portUpCost, PORT_MAX_LV, MK_COST, MK_NAMES, CORE_RATE, SHIELD_ARC0, SHIELD_ARC_MAX, SHIELD_DOWN,
+const out = { VERSION, MONEY_MULT, RR_CFG, RR_NAMES, BOMB_CFG, ARENA, EFIRE_WEAK_LV, EFIRE_WEAK, REPAIR_CFG, ABS, ABSX, statLine, fxLines, ROLES, RNAME, RSHORT, PORT_NAMES, TREE_OF, NODE_COST, infCost, PORT_COST, portUpCost, PORT_MAX_LV, MK_COST, MK_NAMES, CORE_RATE, SHIELD_ARC0, SHIELD_ARC_MAX, SHIELD_DOWN,
   GEO, secIdx, FX, fxText, ABIL, INNATE, TREES, pyrAllowed, treeStats, infCap, BOT_PORTS, BOT_PATH, DIFFS, MTYPES, WEAP, ETYPES, PLANET_A, PLANET_B, PLANET_C, PLANET_K };
 if (typeof module !== 'undefined' && module.exports) module.exports = out; else root.DEFS = out;
 })(this);

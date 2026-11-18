@@ -6,7 +6,7 @@ const { sin, cos, atan2, hypot, min, max, abs, PI, random, floor, round, sqrt, e
 const TAU = PI * 2, clamp = (v, a, b) => v < a ? a : v > b ? b : v;
 const wrap = a => { while (a > PI) a -= TAU; while (a < -PI) a += TAU; return a; };
 const lerp = (a, b, t) => a + (b - a) * t, lerpA = (a, b, t) => a + wrap(b - a) * t;
-const D = window.DEFS, { ROLES, RNAME, RSHORT, PORT_NAMES, TREE_OF, TREES, ABIL, NODE_COST, infCost, infCap, ETYPES, DIFFS, MTYPES, MK_COST, MK_NAMES, PORT_COST, portUpCost, PORT_MAX_LV, CORE_RATE, pyrAllowed, SHIELD_ARC_MAX, ARENA, EFIRE_WEAK_LV, EFIRE_WEAK } = D;
+const D = window.DEFS, { ROLES, RNAME, RSHORT, PORT_NAMES, TREE_OF, TREES, ABIL, NODE_COST, infCost, infCap, ETYPES, DIFFS, MTYPES, MK_COST, MK_NAMES, PORT_COST, portUpCost, PORT_MAX_LV, CORE_RATE, pyrAllowed, SHIELD_ARC_MAX, ARENA, EFIRE_WEAK_LV, EFIRE_WEAK, RR_CFG, RR_NAMES } = D;
 const PILOT = 0, GUNR = 1, REPAIR = 2, ENG = 3, SHIELD = 4, GUNL = 5;
 const RICON = ['✈', '⟫', '✚', '⚙', '◐', '⟪'];
 const PLAYER_RED = '#ff3030', ENEMY_GREEN = '#39ff4a';
@@ -16,8 +16,8 @@ if (isTouch) document.body.classList.add('touch');
 const ROLE_HELP = [
   'Steer by aiming (mouse/stick). Click = nose laser. You <b>cannot</b> change speed: that is the Engineer. If the Cockpit is destroyed the ship drifts straight ahead until it is repaired. Your vote counts extra on the star map.',
   'Aim + hold click to fire your starboard (right) turret. Your red bolts shoot down missiles and flak. If the port turret is destroyed you get a full 360° arc.',
-  '<b>Click a damaged port</b> in your big side panel (or press 1-6, 0 = hull) to start repairing it: it then repairs <b>automatically</b>, and the port\'s own <b>minigame</b> makes it faster (up to +100%). Your drone is out by default and follows your cursor; <b>disable it (G)</b> to repair 50% faster. You cannot repair the Repair Bay; if it is destroyed your crewmates must click it back online, and until then you can neither repair nor use the drone.',
-  'You alone control speed: W/S or wheel = throttle. 1/2/3 route a power pip to Engines/Weapons/Shields (4 = balanced). Engines destroyed = the ship slowly stalls until repaired.',
+  '<b>Click a damaged port</b> in your big side panel (or press 1-6, 0 = hull) to start repairing it: it then repairs <b>automatically</b>, and the port\'s own <b>minigame</b> makes it faster (up to +100%). Your little starship drone is out by default and <b>flies itself</b>: it burns nearby enemies with a short-range laser and picks up credits and items. <b>Recall it (G)</b> to repair 50% faster. You cannot repair the Repair Bay; if it is destroyed your crewmates must click it back online, and until then you can neither repair nor use the drone.',
+  'You alone control speed: W/S or wheel = throttle. You also <b>reroute power</b>: you have <b>10 slots</b> to spread over Engines (top speed + quicker throttle), Weapons (gun fire rate), Shields (faster recharge once down) and Repair (faster repairs). Keys 1-4 add a slot, Shift+1-4 remove one. Every filled slot drains the ship\'s energy, and each extra slot drains faster: with all 10 filled the bar always falls. At 0 energy rerouting is off and engine thrust is capped at 25% for 20 s. <b>Q = Proton Bomb</b> (own cooldown, no energy). Engines destroyed = the ship slowly stalls until repaired.',
   'Aim to place the blue shield arc: it stays where you point it even when the ship turns. It blocks ALL enemy fire until its HP is gone, then it needs 20 s to recharge. Buy HP and arc width (starts 15°, max 90°) in the upgrades; the Lance abilities fire the shield as a weapon.',
   'Aim + hold click to fire your port (left) turret. Your red bolts shoot down missiles and flak. If the starboard turret is destroyed you get a full 360° arc.'];
 const COMMON = 'Your station destroyed? Ask the Repair crew to click it. <b>If the Repair Bay is destroyed, everybody mashes CLICK RAPIDLY</b> to fix it. <b>Q/E/R</b> = your abilities (pick them in the skill pyramid, U). <b>Tab</b> switch role · <b>H</b> help.';
@@ -263,6 +263,7 @@ function rockSprite(r, seed) { return spr('rock' + seed % 6 + '_' + round(r / 6)
 const ASPR = {
   fr: () => spr('afr', 90, 50, (g, R) => { shipBody(g, R, mirror([[40, 0], [34, -10], [-30, -12], [-40, -8]]), 40, '#c9c0a8', '#6b6250'); for (let i = 0; i < 4; i++) { g.fillStyle = ['#7a6040', '#4a6a7a', '#7a4a40', '#5a7a4a'][i]; g.fillRect(-26 + i * 14, -18, 12, 8); g.fillRect(-26 + i * 14, 10, 12, 8); } g.fillStyle = '#9fe'; g.fillRect(34, -3, 5, 6); g.fillStyle = '#6cf'; g.fillRect(-43, -6, 3, 12); }),
   fs: () => spr('afs', 200, 200, (g, R) => { g.strokeStyle = '#99a3ad'; g.lineWidth = 14; g.beginPath(); g.arc(0, 0, 80, 0, TAU); g.stroke(); g.strokeStyle = 'rgba(0,0,0,.35)'; g.lineWidth = 2; g.beginPath(); g.arc(0, 0, 80, 0, TAU); g.stroke(); for (let i = 0; i < 4; i++) { g.save(); g.rotate(i * PI / 2); g.fillStyle = '#7d868f'; g.fillRect(16, -4, 60, 8); g.restore(); } const gr = g.createRadialGradient(-6, -6, 2, 0, 0, 22); gr.addColorStop(0, '#e6eaee'); gr.addColorStop(1, '#5b636b'); g.fillStyle = gr; g.beginPath(); g.arc(0, 0, 22, 0, TAU); g.fill(); g.fillStyle = '#5cf'; for (let i = 0; i < 16; i++) { const a = i / 16 * TAU; g.fillRect(cos(a) * 80 - 1.5, sin(a) * 80 - 1.5, 3, 3); } }),
+  pax: () => spr('apax', 130, 70, (g, R) => { shipBody(g, R, mirror([[56, 0], [44, -12], [-40, -16], [-56, -10]]), 56, '#dfe6ee', '#6a7686'); g.fillStyle = '#3a4a60'; g.fillRect(-30, -9, 62, 18); for (let i = 0; i < 8; i++) { g.fillStyle = '#ffe9a0'; g.fillRect(-26 + i * 7.5, -6, 4.5, 12); } g.fillStyle = '#9fe'; g.fillRect(44, -4, 7, 8); g.fillStyle = '#6cf'; g.fillRect(-60, -9, 4, 18); }),
   pod: () => spr('apod', 40, 30, (g, R) => { shipBody(g, R, mirror([[14, 0], [10, -7], [-12, -8], [-14, -4]]), 14, '#e8e2d0', '#857a60'); g.fillStyle = '#6cf'; g.fillRect(4, -3, 6, 6); }),
 };
 // v3 enemy art
@@ -426,7 +427,9 @@ function processEvents(s) {
     else if (k === 'sd') { toast('⚠ ' + secName(e[1]) + ' DESTROYED: on fire, benefits lost', '#f66'); SFX.alarm();
       if (e[1] === REPAIR) banner(me.role === REPAIR ? 'YOUR REPAIR BAY IS DESTROYED<br><span style="font-size:.5em">no repairs or drones until your crew fixes it</span>' : 'REPAIR BAY DESTROYED!<br><span style="font-size:.5em;color:#ffd54a">REPAIR IT IMMEDIATELY · CLICK RAPIDLY</span>', 3.2);
       else if (e[1] === me.role) banner('YOUR STATION IS DOWN<br><span style="font-size:.5em">the Repair crew must click it to repair it</span>', 2.6); }
-    else if (k === 'dr') { if (me.role === REPAIR) toast(e[1] ? '🛸 Drone disabled: repairs are 50% faster' : '🛸 Drone launched', e[1] ? '#6f6' : '#6df'); }
+    else if (k === 'pwr') { if (e[1]) { toast('⚡ Power restored: rerouting back online', '#ffd54a'); tone(700, 0.2, 'triangle', 0.08, 1200); } else { banner('POWER DEPLETED<br><span style="font-size:.5em;color:#ffd54a">rerouting offline · engine thrust 25% · 20s to recharge</span>', 3.2); SFX.alarm(); } }
+    else if (k === 'pax') { banner('PASSENGERS ABOARD!<br><span style="font-size:.5em;color:#ffd54a">fly them back to the start</span>', 3.2); SFX.wave(); }
+    else if (k === 'dr') { if (me.role === REPAIR) toast(e[1] ? '🛸 Drone recalled: repairs are 50% faster' : '🛸 Drone launched', e[1] ? '#6f6' : '#6df'); }
     else if (k === 'sr') { toast('✔ ' + secName(e[1]) + ' back online', '#7f7'); SFX.fixed(); }
     else if (k === 'port') { toast('🛠 ' + RSHORT[e[1]] + ' port ' + (e[2] + 1) + ' installed: ' + (portInfo(e[1], e[2]) || { name: e[3] }).name, '#6df'); SFX.core(); }
     else if (k === 'cv') { SFX.coin(); }
@@ -464,13 +467,13 @@ function interp() {
   const t = b.tm > a.tm ? clamp((rt - a.tm) / (b.tm - a.tm), 0, 1.2) : 1;
   const A_ = a.sh, B = b.sh, L = (p, q, i) => lerp(p[i], q[i], t);
   const o = { s: b, sh: B, x: lerp(A_.x, B.x, t), y: lerp(A_.y, B.y, t), a: lerpA(A_.a, B.a, t), sa: lerpA(A_.sa, B.sa, t), tl: lerpA(A_.tl, B.tl, t), tr: lerpA(A_.tr, B.tr, t) };
-  o.dr = B.dr.map((d, i) => d && A_.dr[i] ? [lerp(A_.dr[i][0], d[0], t), lerp(A_.dr[i][1], d[1], t)] : d);
+  o.dr = B.dr.map((d, i) => d && A_.dr[i] ? [lerp(A_.dr[i][0], d[0], t), lerp(A_.dr[i][1], d[1], t), lerpA(A_.dr[i][2], d[2], t), d[3], d[4]] : d);
   o.sd = B.sd && A_.sd ? [lerp(A_.sd[0], B.sd[0], t), lerp(A_.sd[1], B.sd[1], t)] : B.sd;
   o.e = b.e.map(e => { const p = a.eMap.get(e[0]); if (!p) return e; const n = e.slice(); n[2] = L(p, e, 2); n[3] = L(p, e, 3); n[4] = lerpA(p[4], e[4], t); if (e[8] && p[8]) n[8] = e[8].map((q, k) => p[8][k] ? [q[0], lerpA(p[8][k][1], q[1], t), q[2]] : q); return n; });
   o.eb = b.eb.map(q => { if (q[7]) { const p = a.bMap.get(q[0]); return p ? [q[0], L(p, q, 1), L(p, q, 2), q[3], q[4], q[5]] : q; }
     const dt_ = rt - b.tm, d_ = q[6] * (a.bMap.has(q[0]) ? dt_ : max(0, dt_)); return [q[0], q[1] + cos(q[3]) * d_, q[2] + sin(q[3]) * d_, q[3], q[4], q[5]]; }); // v4: non-homing shots are extrapolated along one straight line
   o.pp = b.pp.map(q => { const p = a.pMap.get(q[0]); return p ? [q[0], L(p, q, 1), L(p, q, 2), lerpA(p[3], q[3], t), q[4]] : q; });
-  o.al = b.al.map(q => { const p = a.aMap.get(q[0]); return p ? [q[0], q[1], L(p, q, 2), L(p, q, 3), lerpA(p[4], q[4], t), q[5], q[6]] : q; });
+  o.al = b.al.map(q => { const p = a.aMap.get(q[0]); return p ? [q[0], q[1], L(p, q, 2), L(p, q, 3), lerpA(p[4], q[4], t), q[5], q[6], lerpA(p[7], q[7], t), q[8]] : q; });
   o.wv = b.wv; o.pk = b.pk.map(q => { const p = a.kMap.get(q[0]); return p ? [q[0], L(p, q, 1), L(p, q, 2), q[3]] : q; });
   while (snaps.length > 2 && snaps[1].tm < rt - 0.5) snaps.shift();
   return o;
@@ -490,7 +493,7 @@ addEventListener('keydown', e => {
   if (k === 'm') setMute(!A.muted); if (k === 'n') setMusic(!A.music);
   if (k === 'h' || k === '?') toggleCard(); if (k === 'tab') togglePanel('rolesp'); if (k === 'u') togglePanel('upp');
   if (k === 'escape') { $('rolesp').classList.add('hide'); $('upp').classList.add('hide'); $('card').classList.add('hide'); }
-  if (me.role === ENG && k >= '1' && k <= '4') act('p' + k);
+  if (me.role === ENG) { const dm = e.code.match(/^Digit([1-4])$/); if (dm) act((e.shiftKey ? 'd' : 'u') + dm[1]); if (k === 'c' || k === '0') act('z'); }
   if (me.role === REPAIR && k === 'g') act('dr');
   if (k === ' ' && me.role !== REPAIR && lastSnap && lastSnap.ph === 'mission' && lastSnap.sh.dn[REPAIR]) rapHit();
   if (me.role === REPAIR && k >= '0' && k <= '6') rtSel = k === '0' ? 18 : +k - 1;
@@ -528,7 +531,7 @@ setInterval(() => {
   if (!joined || !cur) return;
   const [ax, ay] = aimWorld(cur);
   const fire = mouse.down || K['enter'] || tb.f || (isTouch && joy.on && hypot(joy.vx, joy.vy) > 0.85 && (me.role === GUNL || me.role === GUNR || me.role === PILOT));
-  send({ t: 'i', ax: round(ax), ay: round(ay), f: fire ? 1 : 0, as: K.f || tb.as ? 1 : 0, thr: round(thr * 1000) / 1000, rt: rtSel, mb: me.role === REPAIR && MG.key ? round(MG.boost * 100) / 100 : 0, ck: rapTake(), idle: performance.now() - lastAct > 30000 ? 1 : 0, a: acts.splice(0, 6) });
+  send({ t: 'i', ax: round(ax), ay: round(ay), f: fire ? 1 : 0, as: 0, thr: round(thr * 1000) / 1000, rt: rtSel, mb: me.role === REPAIR && MG.key ? round(MG.boost * 100) / 100 : 0, ck: rapTake(), idle: performance.now() - lastAct > 30000 ? 1 : 0, a: acts.splice(0, 6) });
 }, 50);
 
 // ---------- UI ----------
@@ -638,6 +641,18 @@ function phaseChange(from, to, s) {
   if (to === 'result' && s.res) setTimeout(() => { const r = s.res; banner((r.win ? 'MISSION COMPLETE' : 'SHIP LOST') + `<br><span style="font-size:.45em">${r.win ? `+${r.bonus} ¢ completion bonus${r.cores ? ' · +' + r.cores + ' ◆' : ''}` : 'Regroup, upgrade, try again'}</span>`, 2.6); }, 300);
   if (to === 'mission' && !$('upp').classList.contains('hide')) $('upp').classList.add('hide');
 }
+// v5: the repair drone is a little starship with a short-range laser beam
+function drawDrone(d, T) {
+  const [x, y, a, hp, fi] = d; cx.drawImage(glow('#7fe8ff', 20), x - 20, y - 20); cx.drawImage(glow('#6cf', 10), x - cos(a) * 11 - 10, y - sin(a) * 11 - 10);
+  cx.save(); cx.translate(x, y); cx.rotate(a); cx.scale(1.35, 1.35);
+  cx.fillStyle = '#26323f'; cx.beginPath(); cx.moveTo(-7, -2); cx.lineTo(-13, -11); cx.lineTo(-3, -6); cx.closePath(); cx.fill(); cx.beginPath(); cx.moveTo(-7, 2); cx.lineTo(-13, 11); cx.lineTo(-3, 6); cx.closePath(); cx.fill();
+  const g = cx.createLinearGradient(0, -7, 0, 7); g.addColorStop(0, '#f2f6fa'); g.addColorStop(0.5, '#9fb0c2'); g.addColorStop(1, '#4a5868'); cx.fillStyle = g;
+  cx.beginPath(); cx.moveTo(14, 0); cx.lineTo(5, -6); cx.lineTo(-9, -5); cx.lineTo(-11, 0); cx.lineTo(-9, 5); cx.lineTo(5, 6); cx.closePath(); cx.fill(); cx.strokeStyle = '#1c2530'; cx.lineWidth = 1; cx.stroke();
+  cx.fillStyle = '#5fe0ff'; cx.beginPath(); cx.ellipse(3, 0, 4.5, 2.6, 0, 0, TAU); cx.fill(); cx.fillStyle = 'rgba(255,255,255,.7)'; cx.fillRect(1, -1.6, 3, 1);
+  cx.fillStyle = '#6fe0ff'; cx.fillRect(-12, -1.5, 3, 3); cx.fillStyle = '#ff9a40'; cx.fillRect(14, -1, 3, 2);
+  cx.restore(); if (fi) cx.drawImage(glow('#aff', 14), x + cos(a) * 21 - 14, y + sin(a) * 21 - 14);
+  if (hp < 1) hpBar(x, y - 18, 22, hp, hp < 0.4 ? '#f55' : '#7f7');
+}
 let abKey = '';
 function hudDom(s) {
   const M = s.mi, sh = s.sh;
@@ -647,6 +662,7 @@ function hudDom(s) {
     else if (M.type === 'flagship') obj = M.wave < M.waves ? `Escort wave ${M.wave}/${M.waves}` : `Destroy the flagship's gun ports · ${M.left} hostiles`;
     else if (M.type === 'station') obj = `Knock out every station battery · ${M.left} hostiles`;
     else if (M.type === 'hostages') obj = `Pods rescued ${M.got}/${M.need} (lost ${M.lost}) · fly over a pod`;
+    else if (M.type === 'passengers') obj = M.pax ? `Passengers aboard! Return to the start · ${round(max(0, sh.x - (M.sx + 420)))}px to go` : `Fly to the far end and pick up the passengers · ${round(max(0, M.px - 150 - sh.x))}px to go`;
     else if (M.type === 'escort') obj = `Freighters home ${M.got} · ${s.al.filter(a => a[1] === 'fr').length} en route`;
   }
   $('mi').innerHTML = s.ph === 'mission' && M ? `<b>${M.planet.name}</b> · ${MTYPES[M.type].n} · <span class="d${M.diff}">${DIFFS[M.diff].n}</span> Lv ${M.lv}<br>${obj}<br><span class="y">${me.cr} ¢</span> · <span class="c">${s.co} ◆</span> · ${MK_NAMES[s.mk]} · ship ${me.code}${me.pub ? ' (public)' : ''}`
@@ -661,7 +677,7 @@ function hudDom(s) {
   const myB = me.role >= 0 ? s.crew[me.role][6] : []; $('buffs').innerHTML = inM && myB.length ? myB.map(b => ({ cry: '⚔ Battle Cry', reroute: '⚡ Rerouted engine power', rhalf: '⚡ Split power', stim: '💉 Stim', over: '🔥 Overcharge', ovl: '⚡ Overload' }[b] || b)).join(' · ') : '';
 }
 // ----- live HUD pieces (v3) -----
-const HINTS = [[['Click', 'nose laser'], ['Aim', 'steer']], [['Click', 'fire turrets']], [['Click a port', 'start repair'], ['G', 'drone off: +50%']], [['W/S', 'throttle'], ['1·2·3·4', 'power']], [['Aim', 'aim the arc'], ['Ship turns', 'arc stays put']], [['Click', 'fire turrets']]];
+const HINTS = [[['Click', 'nose laser'], ['Aim', 'steer']], [['Click', 'fire turrets']], [['Click a port', 'start repair'], ['G', 'recall drone: +50%']], [['W/S', 'throttle'], ['1-4 / Shift', 'power slots']], [['Aim', 'aim the arc'], ['Ship turns', 'arc stays put']], [['Click', 'fire turrets']]];
 function crewLine(s, c, i) { const sh = s.sh, down = []; for (let k = 0; k < 18; k++) if (sh.dn[k] && secRole(k) === i) down.push(secShort(k)); return `<div class="${i === me.role ? 'me' : c[1] ? 'bot' : ''} ${down.length ? 'dn' : ''}">${RICON[i]} ${RSHORT[i]} ${c[1] ? '🤖' : '👤'} ${c[0]}${c[4] ? ' (idle·bot)' : ''}${c[3] ? ' 🔧' : ''}${down.length ? ' ✖ ' + down.join(', ') + ' DOWN' : ''}${c[6].length ? ' <span class="y">' + c[6].map(b => '⚡' + b).join(' ') + '</span>' : ''}</div>`; }
 function abilityBar(s) {
   const r = me.role, ab = s.crew[r][5], key = r + '|' + ab.map(a => a ? a[0] : '-').join();
@@ -701,11 +717,12 @@ function mgInit(kind) {
   if (kind === 'weld') { S.ph = Math.random() * 6; S.prog = 0; }
   if (kind === 'wire') { const o = [0, 1, 2, 3]; for (let i = 3; i > 0; i--) { const j = floor(Math.random() * (i + 1)); [o[i], o[j]] = [o[j], o[i]]; } S.right = o; S.sel = -1; S.done = [0, 0, 0, 0]; }
 }
+// v5 fix: no pointer capture (a lost pointerup used to leave the canvas swallowing every later click, so switching ports got stuck); listen on window instead
 (function () {
   const c = $('rg'); const pos = e => { const r = c.getBoundingClientRect(); MG.mx = (e.clientX - r.left) * MGW / r.width; MG.my = (e.clientY - r.top) * MGH / r.height; };
-  c.addEventListener('pointerdown', e => { pos(e); MG.dn = 1; MG.clk = 1; try { c.setPointerCapture(e.pointerId); } catch (_) { } e.preventDefault(); });
-  c.addEventListener('pointermove', pos);
-  const up = () => { MG.dn = 0; }; c.addEventListener('pointerup', up); c.addEventListener('pointercancel', up);
+  c.addEventListener('pointerdown', e => { pos(e); MG.dn = 1; MG.clk = 1; e.preventDefault(); });
+  addEventListener('pointermove', e => { if (MG.dn || e.target === c) pos(e); });
+  const up = () => { MG.dn = 0; }; addEventListener('pointerup', up); addEventListener('pointercancel', up); addEventListener('blur', up); document.addEventListener('visibilitychange', up);
 })();
 const seamY = (x, ph) => 108 + 26 * sin(x / 46 + ph) + 10 * sin(x / 17 + ph * 2);
 function mgGood(ok, dt, tau) { MG.boost += ((ok ? 1 : 0) - MG.boost) * (1 - exp(-dt / tau)); }
@@ -803,11 +820,12 @@ function mgFrame(dt) {
 }
 // build the panel once
 let repBuilt = 0, repKey = '';
+function repSelect(t) { rtSel = t; repKey = ''; SFX.ui && SFX.ui(); }   // v5: switching is immediate, also mid-repair (pointerdown, rows are never rebuilt under the cursor)
 function repBuild() {
   repBuilt = 1;
-  $('hlist').addEventListener('click', e => { const r = e.target.closest('[data-t]'); if (!r) return; const t = +r.dataset.t; if (r.classList.contains('lock')) { toast('The Repair Bay cannot be repaired by you while it is destroyed. Your crew must click it.', '#f88'); return; } rtSel = rtSel === t ? -1 : t; repKey = ''; SFX.ui && SFX.ui(); });
-  $('hullrow').addEventListener('click', () => { rtSel = rtSel === 18 ? -1 : 18; repKey = ''; SFX.ui && SFX.ui(); });
-  $('drnb').addEventListener('click', () => act('dr'));
+  $('hlist').addEventListener('pointerdown', e => { const r = e.target.closest('[data-t]'); if (!r) return; e.preventDefault(); const t = +r.dataset.t; if (r.classList.contains('lock')) { toast('The Repair Bay cannot be repaired by you while it is destroyed. Your crew must click it.', '#f88'); return; } repSelect(t); });
+  $('hullrow').addEventListener('pointerdown', e => { e.preventDefault(); repSelect(18); });
+  $('drnb').addEventListener('pointerdown', e => { e.preventDefault(); act('dr'); });
 }
 function hcol(f, dn) { return dn ? '#f33' : f < 0.35 ? '#f84' : f < 0.7 ? '#fd4' : '#5f8'; }
 function repPanel(s) {
@@ -818,17 +836,21 @@ function repPanel(s) {
   let m;
   if (down) m = '<span class="r">⚠ YOUR REPAIR BAY IS DESTROYED.</span> You cannot repair ports or launch drones. Your crewmates are clicking it back online (they must repair it).';
   else if (t < 0) m = anyDmg ? '<b class="y">▶ Click a damaged port below to start repairing it.</b> Repair then runs automatically; the minigame makes it faster.' : '<span class="g">All systems nominal.</span> Repairs start when you click a damaged port.';
-  else m = `Repairing <b class="y">${t === 18 ? 'Hull' : secName(t)}</b> · speed <b class="c">×${mult.toFixed(2)}</b> <small>(minigame up to +100%${off ? ', drone-off +50%' : ''})</small>`;
+  else m = `Repairing <b class="y">${t === 18 ? 'Hull' : secName(t)}</b> · speed <b class="c">×${mult.toFixed(2)}</b> <small>(minigame up to +100%${off ? ', drone recalled +50%' : ''})</small>`;
   const key = [down, t, off, m, rtSel, sh.h.toFixed(1), sh.hm, sh.sc.map((v, k) => v < 0 ? '-' : round(v * 100) + (sh.dn[k] ? 'd' : '')).join(','), sh.dr.length, s.mk].join('|');
   if (repKey !== key) {
     repKey = key; $('repmsg').innerHTML = m;
     const hf = sh.h / sh.hm; $('hbi').style.width = round(hf * 100) + '%'; $('hbi').style.background = hcol(hf, 0); $('hbt').textContent = round(sh.h) + ' / ' + round(sh.hm) + ' HP';
     $('hullrow').className = (t === 18 ? 'act ' : '') + (rtSel === 18 ? 'sel' : '') + (hf < 0.995 ? ' dmg' : '');
     const ids = []; for (let k = 0; k < 18; k++) if (sh.sc[k] >= 0) ids.push(k);
-    $('hlist').innerHTML = ids.map(k => { const f = sh.sc[k], dn = sh.dn[k], dmg = dn || f < 0.995, lock = k === REPAIR && down;
-      return `<div class="hr ${dn ? 'dn' : ''} ${dmg ? 'dmg' : ''} ${rtSel === k ? 'sel' : ''} ${t === k ? 'act' : ''} ${lock ? 'lock' : ''}" data-t="${k}"><span class="hn">${k < 6 ? (k + 1) + ' ' : ''}${secShort(k)}</span><div class="hb"><i style="width:${round(f * 100)}%;background:${hcol(f, dn)}"></i></div><b>${dn ? 'DOWN' : round(f * 100) + '%'}</b><em>${t === k ? 'REPAIRING' : lock ? 'locked' : dmg ? 'click to repair' : ''}</em></div>`; }).join('');
+    const idk = ids.join() + '|' + s.mk;
+    if (repPanel.idk !== idk) { repPanel.idk = idk;
+      $('hlist').innerHTML = ids.map(k => `<div class="hr" data-t="${k}"><span class="hn">${k < 6 ? (k + 1) + ' ' : ''}${secShort(k)}</span><div class="hb"><i></i></div><b></b><em></em></div>`).join(''); }
+    $('hlist').querySelectorAll('.hr').forEach(r => { const k = +r.dataset.t, f = sh.sc[k], dn = sh.dn[k], dmg = dn || f < 0.995, lock = k === REPAIR && down;
+      r.className = 'hr' + (dn ? ' dn' : '') + (dmg ? ' dmg' : '') + (rtSel === k ? ' sel' : '') + (t === k ? ' act' : '') + (lock ? ' lock' : '');
+      const bi = r.querySelector('.hb i'); bi.style.width = round(f * 100) + '%'; bi.style.background = hcol(f, dn); r.querySelector('b').textContent = dn ? 'DOWN' : round(f * 100) + '%'; r.querySelector('em').textContent = t === k ? 'REPAIRING' : lock ? 'locked' : dmg ? 'click to repair' : ''; });
     const d = $('drnb'); d.disabled = down; d.className = off ? 'off' : '';
-    d.innerHTML = down ? '🛸 Drone unavailable: Repair Bay destroyed' : off ? '🛸 DRONE DISABLED · <b>repairing 50% faster</b><small>click (or G) to launch the drone again</small>' : '🛸 DRONE ACTIVE · <b>click (or G) to DISABLE it: repairs 50% faster</b><small>the drone follows your cursor and shoots, but slows repairs</small>';
+    d.innerHTML = down ? '🛸 Drone unavailable: Repair Bay destroyed' : off ? '🛸 DRONE RECALLED · <b>repairing 50% faster</b><small>click (or G) to launch the drone again</small>' : '🛸 DRONE OUT · <b>click (or G) to RECALL it: repairs 50% faster</b><small>the drone flies itself: laser beam, picks up loot, but slows repairs</small>';
   }
 }
 // ----- the Repair Bay is destroyed: everybody else must click it back -----
@@ -843,12 +865,36 @@ function rapPanel(s) {
   if (was && !show && s.ph === 'mission') { toast('✔ Repair Bay repaired', '#6f6'); }
 }
 
+// ----- v5 Engineer: power rerouting panel (10 slots over 4 options) -----
+const RR_COL = ['#6cf', '#ff6a6a', '#7ab8ff', '#6fe08a'];
+const RR_DESC = [l => `top speed +${(l * RR_CFG.eng * 100).toFixed(1)}%, throttle response +${round(l * RR_CFG.acc * 100)}%`, l => `gun fire rate +${round(l * RR_CFG.wpn * 100)}%`, l => `shield recharge ${round(l * RR_CFG.shd * 100)}% faster (down ${(20 / (1 + l * RR_CFG.shd)).toFixed(1)}s)`, l => `repair speed +${round(l * RR_CFG.rep * 100)}%`];
+function rrBuild() {
+  if (engPanel.built) return; engPanel.built = 1;
+  $('rrrows').innerHTML = RR_NAMES.map((n, k) => `<div class="rrr" data-k="${k}"><div class="rrh"><b style="color:${RR_COL[k]}">${k + 1} ${n}</b><span class="rrd"></span><button data-d="${k}">−</button><button data-u="${k}">+</button></div><div class="rrs">${'<i></i>'.repeat(10)}</div></div>`).join('');
+  const pe = () => 0;
+  $('rrrows').addEventListener('pointerdown', e => {
+    const sg = e.target.closest('.rrs i'), row = e.target.closest('.rrr'); if (!row) return; const k = +row.dataset.k, P = lastSnap.sh.pip;
+    e.preventDefault(); SFX.ui && SFX.ui();
+    if (e.target.dataset.u !== undefined) { act('u' + (k + 1)); return; } if (e.target.dataset.d !== undefined) { act('d' + (k + 1)); return; }
+    if (sg) { const idx = [...sg.parentNode.children].indexOf(sg) + 1, want = idx === P[k] ? idx - 1 : idx; let diff = want - P[k]; const used = P[0] + P[1] + P[2] + P[3]; if (diff > 0) diff = min(diff, RR_CFG.max - used); for (let q = 0; q < abs(diff); q++) act((diff > 0 ? 'u' : 'd') + (k + 1)); }
+  });
+  $('rrclear').onclick = () => act('z'); $('thr-').onclick = () => setThr(thr - 0.125); $('thr+').onclick = () => setThr(thr + 0.125);
+}
 function engPanel(s) {
-  const sh = s.sh, N = ['ENGINES', 'WEAPONS', 'SHIELDS'], C = ['#6cf', '#f66', '#ffd54a'];
-  if (!engPanel.built) { engPanel.built = 1; $('pips').innerHTML = N.map((n, k) => `<div><span style="color:${C[k]}">${n}</span><div class="bars">${'<i></i>'.repeat(4)}</div><button data-p="${k + 1}">+ (${k + 1})</button></div>`).join('') + `<div><span>RESET</span><div class="bars" style="justify-content:center;font-size:10px;color:#9ab">2·2·2</div><button data-p="4">(4)</button></div>`; $('pips').querySelectorAll('[data-p]').forEach(b => b.onclick = () => { act('p' + b.dataset.p); }); $('thr-').onclick = () => setThr(thr - 0.125); $('thr+').onclick = () => setThr(thr + 0.125); }
-  $('pips').querySelectorAll('.bars').forEach((b, k) => { if (k > 2) return; b.querySelectorAll('i').forEach((i, j) => i.classList.toggle('on', j < sh.pip[k])); });
+  rrBuild(); const sh = s.sh, P = sh.pip, used = sh.eu, lock = sh.lk > 0, st = me.tr && D.treeStats('engineer', me.tr.engineer), pe = 1 + (st ? st.pipEff || 0 : 0), dn = sh.dn[ENG];
+  const net = lock ? sh.em / RR_CFG.lock : sh.rg - sh.rd * (dn ? 0 : 1);
+  const key = [P.join(), used, lock, dn, round(sh.en), sh.em, sh.rd, sh.rg, round(sh.lk), round(thr * 100), sh.spd, me.tr ? JSON.stringify(st && st.pipEff) : ''].join('|');
+  if (engPanel.k === key) return; engPanel.k = key;
+  $('rrused').innerHTML = `slots <b class="${used >= RR_CFG.max ? 'r' : 'y'}">${used}/${RR_CFG.max}</b>`;
+  const f = clamp(sh.en / sh.em, 0, 1); $('rrbar').style.width = (f * 100) + '%'; $('rrbar').style.background = lock ? 'linear-gradient(180deg,#fff6,#0003),#c33' : f < 0.25 ? 'linear-gradient(180deg,#fff6,#0003),#f84' : 'linear-gradient(180deg,#fff6,#0003),#ffd54a';
+  $('rrenv').textContent = `${round(sh.en)} / ${sh.em}`;
+  $('rrnet').innerHTML = lock ? `<span class="r">recharging +${(sh.em / RR_CFG.lock).toFixed(1)}/s</span>` : `generator <b class="g">+${sh.rg.toFixed(1)}</b> · drain <b class="r">−${(dn ? 0 : sh.rd).toFixed(1)}</b> = <b class="${net >= 0 ? 'g' : 'r'}">${net >= 0 ? '+' : ''}${net.toFixed(1)}/s</b>${net < 0 && sh.en > 0 ? ` · empty in <b class="r">${Math.ceil(sh.en / -net)}s</b>` : ''}`;
+  $('rrlock').classList.toggle('hide', !lock); $('rrlock').innerHTML = lock ? `⚠ POWER DEPLETED<br><small>rerouting OFFLINE · engine thrust capped at 25% · power back in <b>${Math.ceil(sh.lk)}s</b></small><div class="lkb"><i style="width:${round((1 - sh.lk / RR_CFG.lock) * 100)}%"></i></div>` : '';
+  $('rrrows').classList.toggle('off', lock || dn);
+  $('rrrows').querySelectorAll('.rrr').forEach((row, k) => { row.querySelector('.rrd').textContent = RR_DESC[k](P[k] * pe); row.querySelector('.rrh b').textContent = (k + 1) + ' ' + RR_NAMES[k] + ' ' + P[k];
+    row.querySelectorAll('.rrs i').forEach((i, j) => { i.className = j < P[k] ? 'on' : ''; i.style.background = j < P[k] ? RR_COL[k] : ''; i.style.boxShadow = j < P[k] ? '0 0 6px ' + RR_COL[k] : ''; }); });
   $('thrbar').style.width = (thr * 100) + '%';
-  $('thrt').innerHTML = `Throttle ${round(thr * 100)}% · speed ${sh.spd}${sh.dn[ENG] ? ' · <span class="r">ENGINES DOWN: stalling</span>' : ''}${sh.dn[PILOT] ? ' · <span class="r">cockpit down: no steering</span>' : ''}`;
+  $('thrt').innerHTML = `Throttle ${round(thr * 100)}% · speed ${sh.spd}${lock ? ' · <span class="r">power depleted: 25% thrust</span>' : ''}${dn ? ' · <span class="r">ENGINES DOWN: stalling</span>' : ''}${sh.dn[PILOT] ? ' · <span class="r">cockpit down: no steering</span>' : ''}`;
 }
 function launch() {
   if (joined) return; joined = true; audioInit(); localStorage.setItem('tss_name', $('name').value.trim());
@@ -898,17 +944,25 @@ function hpBar(x, y, w, f, col) { cx.fillStyle = 'rgba(0,0,0,.6)'; cx.fillRect(x
 function drawWorld(o, T) {
   const s = o.s, sh = o.sh, view = (x, y, r) => abs(x - camX) < W / 2 / Z + r && abs(y - camY) < H / 2 / Z + r;
   // arena edge
-  cx.strokeStyle = 'rgba(255,80,80,.25)'; cx.lineWidth = 6; cx.setLineDash([30, 20]); cx.strokeRect(-ARENA, -ARENA, ARENA * 2, ARENA * 2); cx.setLineDash([]);
+  cx.strokeStyle = 'rgba(255,80,80,.25)'; cx.lineWidth = 6; cx.setLineDash([30, 20]); { const AX = s.mi && s.mi.bx || ARENA, AY = s.mi && s.mi.by || ARENA; cx.strokeRect(-AX, -AY, AX * 2, AY * 2); cx.setLineDash([]);
+    if (s.mi && s.mi.type === 'passengers' && s.ph === 'mission') { const sx = s.mi.sx, px = s.mi.px; cx.strokeStyle = s.mi.pax ? 'rgba(120,255,160,.8)' : 'rgba(120,190,255,.5)'; cx.lineWidth = 4; cx.setLineDash([14, 10]); cx.strokeRect(sx - 420, -AY, 840, AY * 2); cx.setLineDash([]); cx.fillStyle = s.mi.pax ? '#8f8' : '#9cf'; cx.font = 'bold 16px monospace'; cx.textAlign = 'center'; cx.fillText(s.mi.pax ? 'HOME: bring the passengers here' : 'START', sx, -AY + 40); } }
   // escort jump point
   if (s.mi && s.mi.type === 'escort' && s.ph === 'mission') { const x = s.mi.jx, y = s.mi.jy; for (let i = 0; i < 4; i++) { cx.strokeStyle = `rgba(120,190,255,${0.5 - i * 0.1})`; cx.lineWidth = 4; cx.beginPath(); cx.arc(x, y, 50 + i * 18 + sin(T * 3 + i) * 6, T * (1 + i * 0.3), T * (1 + i * 0.3) + PI * 1.4); cx.stroke(); } cx.fillStyle = '#9cf'; cx.font = 'bold 16px monospace'; cx.textAlign = 'center'; cx.fillText('JUMP POINT', x, y - 100); }
   // pickups
-  for (const p of o.pk) { if (!view(p[1], p[2], 20)) continue; if (p[3]) { cx.drawImage(glow('#55ddff', 22), p[1] - 22, p[2] - 22); cx.save(); cx.translate(p[1], p[2]); cx.rotate(T * 2); cx.fillStyle = '#bff'; cx.beginPath(); cx.moveTo(0, -9); cx.lineTo(7, 0); cx.lineTo(0, 9); cx.lineTo(-7, 0); cx.closePath(); cx.fill(); cx.restore(); } else { cx.drawImage(glow('#ffcc33', 12), p[1] - 12, p[2] - 12); cx.save(); cx.translate(p[1], p[2]); cx.scale(abs(cos(T * 4 + p[0])), 1); cx.fillStyle = '#ffd54a'; cx.fillRect(-4, -5, 8, 10); cx.fillStyle = '#a70'; cx.fillRect(-2, -3, 4, 6); cx.restore(); } }
+  for (const p of o.pk) { if (!view(p[1], p[2], 40)) continue; const pu = 0.75 + 0.25 * sin(T * 6 + p[0]);
+    if (p[3]) { cx.drawImage(glow('#7fffff', 34), p[1] - 34, p[2] - 34); cx.drawImage(glow('#55ddff', 22), p[1] - 22, p[2] - 22); cx.save(); cx.translate(p[1], p[2]); cx.rotate(T * 2); cx.fillStyle = '#dffcff'; cx.strokeStyle = '#fff'; cx.lineWidth = 1.5; cx.beginPath(); cx.moveTo(0, -12); cx.lineTo(9, 0); cx.lineTo(0, 12); cx.lineTo(-9, 0); cx.closePath(); cx.fill(); cx.stroke(); cx.restore(); }
+    else { cx.save(); cx.globalAlpha = pu; cx.drawImage(glow('#ffe36a', 38), p[1] - 38, p[2] - 38); cx.restore(); cx.drawImage(glow('#ffcc33', 20), p[1] - 20, p[2] - 20); cx.strokeStyle = `rgba(255,236,120,${0.55 * pu})`; cx.lineWidth = 2; cx.beginPath(); cx.arc(p[1], p[2], 15 + 3 * sin(T * 6 + p[0]), 0, TAU); cx.stroke();
+      cx.save(); cx.translate(p[1], p[2]); cx.scale(max(0.25, abs(cos(T * 4 + p[0]))), 1); cx.fillStyle = '#fff2a8'; cx.strokeStyle = '#fff'; cx.lineWidth = 1.5; cx.fillRect(-6, -8, 12, 16); cx.strokeRect(-6, -8, 12, 16); cx.fillStyle = '#ffb81c'; cx.fillRect(-3.5, -5.5, 7, 11); cx.fillStyle = '#fff'; cx.fillRect(-1, -3.5, 2, 7); cx.restore();
+      cx.fillStyle = `rgba(255,255,255,${pu})`; const sp = 3 + 2 * sin(T * 8 + p[0]); cx.fillRect(p[1] + 9 - sp / 2, p[2] - 10, sp, 1.2); cx.fillRect(p[1] + 9.4, p[2] - 10 - sp / 2 + 0.6, 1.2, sp); } }
   for (const m of s.mn) { cx.fillStyle = '#555'; cx.beginPath(); cx.arc(m[0], m[1], 7, 0, TAU); cx.fill(); if ((T * 3 | 0) % 2) cx.drawImage(glow('#ff4040', 10), m[0] - 10, m[1] - 10); }
   // allies
   for (const a of o.al) {
     if (!view(a[2], a[3], 120)) continue; const f = ASPR[a[1]](); blit(f, a[2], a[3], a[4]);
     if (a[1] === 'fr') { cx.drawImage(glow('#66ccff', 16), a[2] - cos(a[4]) * 44 - 16, a[3] - sin(a[4]) * 44 - 16); hpBar(a[2], a[3] - 34, 50, a[5], '#6cf'); }
-    if (a[1] === 'fs') hpBar(a[2], a[3] - 104, 140, a[5], '#6cf');
+    if (a[1] === 'fs') { hpBar(a[2], a[3] - 104, 140, a[5], '#6cf');
+      for (let q = 0; q < 4; q++) { const ma = a[4] + q * PI / 2, mx = a[2] + cos(ma) * 80, my = a[3] + sin(ma) * 80; cx.save(); cx.translate(mx, my); cx.fillStyle = '#3a424c'; cx.beginPath(); cx.arc(0, 0, 11, 0, TAU); cx.fill(); cx.strokeStyle = '#9fb4c8'; cx.lineWidth = 2; cx.stroke(); cx.rotate(a[7]); cx.fillStyle = '#c8d2dc'; cx.fillRect(2, -3, 24, 6); cx.fillStyle = '#5a6672'; cx.fillRect(2, -3, 24, 2); cx.fillStyle = '#ff6a50'; cx.fillRect(24, -3, 3, 6); if (a[8]) { cx.restore(); cx.drawImage(glow('#ff8060', 24), mx + cos(a[7]) * 28 - 24, my + sin(a[7]) * 28 - 24); continue; } cx.restore(); }
+      cx.fillStyle = '#9cf'; cx.font = 'bold 11px monospace'; cx.textAlign = 'center'; cx.fillText('ARMED STATION', a[2], a[3] - 112); }
+    if (a[1] === 'pax') { cx.drawImage(glow('#ffe9a0', 60), a[2] - 60, a[3] - 60); cx.strokeStyle = 'rgba(255,230,140,.7)'; cx.lineWidth = 2; cx.setLineDash([8, 8]); cx.beginPath(); cx.arc(a[2], a[3], 150, 0, TAU); cx.stroke(); cx.setLineDash([]); cx.fillStyle = '#ffe9a0'; cx.font = 'bold 14px monospace'; cx.textAlign = 'center'; cx.fillText('PASSENGERS: fly close to pick them up', a[2], a[3] - 100); }
     if (a[1] === 'pod') { if ((T * 2 | 0) % 2) cx.drawImage(glow('#66ff66', 18), a[2] - 18, a[3] - 18); cx.strokeStyle = 'rgba(100,255,100,.6)'; cx.lineWidth = 2; cx.setLineDash([6, 6]); cx.beginPath(); cx.arc(a[2], a[3], 110, 0, TAU); cx.stroke(); cx.setLineDash([]); if (a[6] > 0) { cx.strokeStyle = '#7f7'; cx.lineWidth = 5; cx.beginPath(); cx.arc(a[2], a[3], 26, -PI / 2, -PI / 2 + TAU * a[6]); cx.stroke(); } hpBar(a[2], a[3] - 26, 34, a[5], '#7f7'); }
   }
   // enemies
@@ -916,7 +970,7 @@ function drawWorld(o, T) {
   // ship
   if (!sh.dead && s.ph !== 'result' || (s.ph === 'result' && !sh.dead)) drawShip(o, T);
   // drones
-  for (const d of o.dr) if (d) { cx.drawImage(glow('#c08cff', 18), d[0] - 18, d[1] - 18); cx.save(); cx.translate(d[0], d[1]); cx.rotate(T * 3); cx.fillStyle = '#ccd'; cx.fillRect(-6, -6, 12, 12); cx.fillStyle = '#c8f'; cx.fillRect(-3, -3, 6, 6); cx.restore(); }
+  for (const d of o.dr) if (d) drawDrone(d, T);
   if (o.sd) { cx.strokeStyle = 'rgba(120,220,255,.8)'; cx.lineWidth = 3; cx.beginPath(); cx.arc(o.sd[0], o.sd[1], 18, 0, TAU); cx.stroke(); cx.fillStyle = '#9cf'; cx.beginPath(); cx.arc(o.sd[0], o.sd[1], 6, 0, TAU); cx.fill(); }
   // beams
   drawWaves(o, T); drawBeams(o, T);
@@ -1028,7 +1082,7 @@ function drawShip(o, T) {
   if (me.role === REPAIR && sh.tk[0] >= 0 && sh.tk[0] < 18) { const k = sh.tk[0], [lx, ly] = k < 6 ? G.st[k] : (G.po[(k - 6) >> 1][(k - 6) & 1] || [0, 0]), [px, py] = L2W(lx, ly); cx.strokeStyle = '#c8f'; cx.lineWidth = 2; cx.beginPath(); cx.arc(px, py, 12 + sin(T * 8) * 2, 0, TAU); cx.stroke(); }
 }
 function drawBeams(o, T) {
-  for (const b of o.sh.bm) { if (!b) continue; const px = b[1], py = b[2], ex = px + cos(b[3]) * b[4], ey = py + sin(b[3]) * b[4]; cx.lineCap = 'round'; cx.strokeStyle = 'rgba(255,40,40,.35)'; cx.lineWidth = 12 + sin(T * 40) * 3; cx.beginPath(); cx.moveTo(px, py); cx.lineTo(ex, ey); cx.stroke(); cx.strokeStyle = '#ff6060'; cx.lineWidth = 4; cx.stroke(); cx.strokeStyle = '#fff'; cx.lineWidth = 1.5; cx.stroke(); cx.lineCap = 'butt'; cx.drawImage(glow('#ff4040', 20), ex - 20, ey - 20); }
+  for (const b of o.sh.bm) { if (!b) continue; if (b[0] >= 100) { const px = b[1], py = b[2], ex = px + cos(b[3]) * b[4], ey = py + sin(b[3]) * b[4]; cx.lineCap = 'round'; cx.strokeStyle = 'rgba(80,230,255,.30)'; cx.lineWidth = 7 + sin(T * 50) * 1.5; cx.beginPath(); cx.moveTo(px, py); cx.lineTo(ex, ey); cx.stroke(); cx.strokeStyle = '#7ff4ff'; cx.lineWidth = 2.4; cx.stroke(); cx.strokeStyle = '#fff'; cx.lineWidth = 0.9; cx.stroke(); cx.lineCap = 'butt'; cx.drawImage(glow('#6ff', 12), ex - 12, ey - 12); continue; } const px = b[1], py = b[2], ex = px + cos(b[3]) * b[4], ey = py + sin(b[3]) * b[4]; cx.lineCap = 'round'; cx.strokeStyle = 'rgba(255,40,40,.35)'; cx.lineWidth = 12 + sin(T * 40) * 3; cx.beginPath(); cx.moveTo(px, py); cx.lineTo(ex, ey); cx.stroke(); cx.strokeStyle = '#ff6060'; cx.lineWidth = 4; cx.stroke(); cx.strokeStyle = '#fff'; cx.lineWidth = 1.5; cx.stroke(); cx.lineCap = 'butt'; cx.drawImage(glow('#ff4040', 20), ex - 20, ey - 20); }
 }
 function drawEnemyFire(o, view) {
   for (const b of o.eb) { if (!view(b[1], b[2], 30)) continue;
@@ -1048,7 +1102,8 @@ function drawHUD(o, T) {
   const s = o.s, sh = o.sh; if (s.ph !== 'mission') return;
   const ind = (x, y, col, sz) => { const dx = x - camX, dy = y - camY, hw = W / 2 / Z, hh = H / 2 / Z; if (abs(dx) < hw && abs(dy) < hh) return; const a = atan2(dy, dx), k = min((W / 2 - 24) / abs(cos(a) || 1e-6), (H / 2 - 24) / abs(sin(a) || 1e-6)); const px = W / 2 + cos(a) * k, py = H / 2 + sin(a) * k; cx.save(); cx.translate(px, py); cx.rotate(a); cx.fillStyle = col; cx.beginPath(); cx.moveTo(sz, 0); cx.lineTo(-sz * 0.6, -sz * 0.6); cx.lineTo(-sz * 0.6, sz * 0.6); cx.closePath(); cx.fill(); cx.restore(); };
   for (const e of o.e) if (e[1] !== 10) ind(e[2], e[3], ETYPES[e[1]].mp ? '#9f9' : 'rgba(57,255,74,.7)', ETYPES[e[1]].mp ? 12 : 7);
-  for (const a of o.al) ind(a[2], a[3], a[1] === 'pod' ? '#7f7' : '#6cf', 10);
+  for (const a of o.al) ind(a[2], a[3], a[1] === 'pod' ? '#7f7' : a[1] === 'pax' ? '#ffe9a0' : '#6cf', 10);
+  if (s.mi && s.mi.type === 'passengers' && s.mi.pax) ind(s.mi.sx, 0, '#8f8', 12);
   if (s.mi && s.mi.type === 'escort') ind(s.mi.jx, s.mi.jy, '#9cf', 12);
   for (const p of o.pk) if (p[3]) ind(p[1], p[2], '#6df', 8);
   const bw = min(230, W * 0.32), bx = 12, by = H - (isTouch ? 230 : 96);
@@ -1059,8 +1114,8 @@ function drawHUD(o, T) {
   const down = sh.shd > 0 || sh.shp <= 0;
   cx.fillStyle = down ? '#f88' : '#7ab8ff'; cx.fillText(down ? `SHIELD DOWN · ${Math.ceil(sh.shd)}s` : `SHIELD ${sh.shp.toFixed(1)}/${sh.shm.toFixed(1)} · ${sh.arc}° arc`, bx, by + 20);
   hudBar(bx, by + 24, bw, 10, down ? 1 - sh.shd / 20 : clamp(sh.shp / sh.shm, 0, 1), down ? '#a44' : '#4aa8ff', 'rgba(0,20,50,.75)');
-  cx.fillStyle = '#ffd54a'; cx.fillText(`ENERGY ${sh.en}/${sh.em}`, bx, by + 48); hudBar(bx, by + 52, bw, 8, sh.en / sh.em, '#ffd54a', 'rgba(40,40,0,.75)');
-  cx.fillStyle = '#9ab'; cx.fillText(isTouch ? `SPD ${sh.spd}` : `SPD ${sh.spd} · THR ${round(sh.thr * 100)}% · PWR E${sh.pip[0]} W${sh.pip[1]} S${sh.pip[2]}`, bx, by + 76);
+  cx.fillStyle = sh.lk > 0 ? '#ff6a6a' : '#ffd54a'; cx.fillText(sh.lk > 0 ? `POWER DEPLETED · back in ${Math.ceil(sh.lk)}s · 25% thrust` : `POWER ${sh.en}/${sh.em}${sh.eu ? ' · ' + sh.eu + '/10 slots' : ''}`, bx, by + 48); hudBar(bx, by + 52, bw, 8, sh.en / sh.em, '#ffd54a', 'rgba(40,40,0,.75)');
+  cx.fillStyle = '#9ab'; cx.fillText(isTouch ? `SPD ${sh.spd}` : `SPD ${sh.spd} · THR ${round(sh.thr * 100)}% · RR E${sh.pip[0]} W${sh.pip[1]} S${sh.pip[2]} R${sh.pip[3]}`, bx, by + 76);
   // ship schematic: every section, extra ports included
   const scx = W - 74, scy = isTouch ? 300 : 124, G = GEO[s.mk], K_ = 0.6;
   cx.fillStyle = 'rgba(5,10,20,.6)'; cx.beginPath(); cx.arc(scx, scy, 62, 0, TAU); cx.fill();
@@ -1074,5 +1129,5 @@ function drawHUD(o, T) {
   cx.fillStyle = '#456'; cx.font = '10px monospace'; cx.textAlign = 'right'; cx.fillText(round(fps) + 'fps', W - 6, H - 4);
 }
 
-window.TSS = { planet: planetCanvas, PK, send, get snap() { return lastSnap; }, get cur() { return cur; }, me, get camZ() { return Z; }, setZ(v) { Z = v; }, setUp(t) { upTree = t; renderUp(); } };
+window.TSS = { worldToScreen(x, y) { return [(x - camX) * Z + W / 2, (y - camY) * Z + H / 2]; }, planet: planetCanvas, PK, send, get snap() { return lastSnap; }, get cur() { return cur; }, me, get camZ() { return Z; }, setZ(v) { Z = v; }, setUp(t) { upTree = t; renderUp(); } };
 })();

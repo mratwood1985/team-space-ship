@@ -1,9 +1,9 @@
 'use strict';
-// Team Space Ship v4: server-authoritative co-op. Node + ws.
+// Team Space Ship v5: server-authoritative co-op. Node + ws.
 const http = require('http'), fs = require('fs'), path = require('path'), zlib = require('zlib'), crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const D = require('./public/defs.js');
-const { ARENA, EFIRE_WEAK_LV, EFIRE_WEAK, REPAIR_CFG, ROLES, TREE_OF, TREES, ABIL, INNATE, NODE_COST, infCost, PORT_COST, portUpCost, PORT_MAX_LV, ETYPES, WEAP, DIFFS, MTYPES, MK_COST, CORE_RATE, BOT_PORTS, BOT_PATH, GEO, secIdx, pyrAllowed, treeStats, infCap, SHIELD_ARC0, SHIELD_ARC_MAX, SHIELD_DOWN } = D;
+const { MONEY_MULT, RR_CFG, BOMB_CFG, ARENA, EFIRE_WEAK_LV, EFIRE_WEAK, REPAIR_CFG, ROLES, TREE_OF, TREES, ABIL, INNATE, NODE_COST, infCost, PORT_COST, portUpCost, PORT_MAX_LV, ETYPES, WEAP, DIFFS, MTYPES, MK_COST, CORE_RATE, BOT_PORTS, BOT_PATH, GEO, secIdx, pyrAllowed, treeStats, infCap, SHIELD_ARC0, SHIELD_ARC_MAX, SHIELD_DOWN } = D;
 const PORT = +process.env.PORT || 8080;
 const DEV = process.env.DEV_TOOLS === '1'; // test-only hooks (screenshots); never set in production
 const PUB = path.join(__dirname, 'public');
@@ -90,7 +90,7 @@ function botSpend(room, prof, i) {
 // ---------- rooms ----------
 const rooms = new Map();
 const BOT_NAMES = ['ARC-7', 'VEGA', 'BOLT', 'NOVA', 'RIVET', 'HALO', 'ZIP', 'ORBIT', 'FLUX', 'K-9X', 'JAX', 'TESS'];
-const MAIN_SEQ = ['pirates', 'hostages', 'escort', 'station', 'defend', 'flagship'];
+const MAIN_SEQ = ['pirates', 'hostages', 'escort', 'passengers', 'station', 'defend', 'flagship'];
 
 class Room {
   constructor(code, isPublic) {
@@ -131,10 +131,13 @@ class Room {
     const c = portUpCost(p.lv); if (prof.cr < c) return 'not enough credits'; prof.cr -= c; p.lv++; const k = secIdx(role, slot); this.ship.sec[k].hp = this.secMax(k); return null;
   }
   convertCore() { if (this.mk < 2) return 'core conversion unlocks with the Mk III ship'; if (this.cores < 1) return 'no crew cores'; this.cores--; this.grant(CORE_RATE); this.ev('cv'); return null; }
-  pipF(k) { return 1 + (this.ship.pip[k] - 2) * 0.15 * (1 + this.S(ENG, 'pipEff')); }
+  // v5 power rerouting: slots pip[0..3] = engines, weapons, shield recharge, repair. Off while the engineer's station is down or power is depleted.
+  rrLv(k) { const s = this.ship; return (s.lock > 0 || !this.up(ENG)) ? 0 : s.pip[k]; }
+  pipF(k) { const l = this.rrLv(k), pe = 1 + this.S(ENG, 'pipEff'); return 1 + [RR_CFG.eng, RR_CFG.wpn, RR_CFG.shd, RR_CFG.rep][k] * l * pe; }
+  rrUsed() { const P = this.ship.pip; return P[0] + P[1] + P[2] + P[3]; }
   ev(...a) { this.events.push(a); }
   grant(v) { // credits are equal for every crew member
-    v = round(v); if (v <= 0) return; this.crewEarned += v;
+    v = round(v * MONEY_MULT); if (v <= 0) return; this.crewEarned += v;
     for (const s of this.seats) { s.bot.cr += v; s.bot.earned += v; }
     for (const c of this.clients) { c.prof.cr += v; c.prof.earned = max(c.prof.earned + v, this.crewEarned); c.dirty = 1; }
   }
@@ -143,9 +146,9 @@ class Room {
   resetShip() {
     this.calcStats();
     const hm = 40 + 12 * this.mk + this.S(PILOT, "hull"), sec = [];
-    this.ship = { x: 0, y: 0, a: -PI / 2, vx: 0, vy: -80, spd: 80, thr: 0.7, hull: hm, hm, sec, en: 70, em: 100, sa: -PI / 2, shp: 3, shm: 3, shDown: 0, shHit: 9, fort: 0,
+    this.ship = { x: 0, y: 0, a: -PI / 2, vx: 0, vy: -80, spd: 80, thr: 0.7, hull: hm, hm, sec, en: 100, em: 100, lock: 0, sa: -PI / 2, shp: 3, shm: 3, shDown: 0, shHit: 9, fort: 0,
       tl: -80 * PI / 180, tr: 80 * PI / 180, beam: {}, pang: {}, drones: [], sdr: { a: 0, hp: 4, cd: 0 }, task: { i: -1, mult: 0 }, inv: 0, bubble: 0, aegis: 0, rally: 0, burn: 0, droneOff: 0, reroute: 0, dod: 0, strafe: 0, swarm: 0,
-      nose: 0, noseN: 0, scat: 0, gl: 0, gr: 0, gp: {}, mineT: 3.5, dead: 0, pip: [2, 2, 2], roll: 0 };
+      nose: 0, noseN: 0, scat: 0, gl: 0, gr: 0, gp: {}, mineT: 3.5, dead: 0, pip: [0, 0, 0, 0], roll: 0 };
     for (let k = 0; k < NSEC; k++) sec.push({ hp: 0, dn: 0 });
     for (let k = 0; k < NSEC; k++) if (this.secExists(k)) sec[k].hp = this.secMax(k);
     this.ship.shm = this.ship.shp = this.shieldMax();
@@ -170,7 +173,7 @@ class Room {
     M.fac = M.type === 'pirates' || M.type === 'hostages' || (random() < 0.3 && M.type !== 'flagship') ? 'pir' : 'dom';
     if (M.type === 'pirates') M.waves = min(5, 2 + floor(L / 3));
     if (M.type === 'flagship') M.waves = 2;
-    if (M.type === 'defend') { M.waves = min(6, 3 + floor(L / 3)); this.allies.push({ id: this.id(), k: 'fs', x: 0, y: 0, a: 0, hp: 90 + 22 * L, mhp: 90 + 22 * L, r: 90 }); this.ship.y = 260; }
+    if (M.type === 'defend') { M.waves = min(6, 3 + floor(L / 3)); this.allies.push({ id: this.id(), k: 'fs', x: 0, y: 0, a: 0, hp: 170 + 40 * L, mhp: 170 + 40 * L, r: 90, ta: 0, gc: [0, 0.3, 0.6, 0.9], gi: 0 }); this.ship.y = 260; }
     if (M.type === 'escort') {
       const a = random() * 2 * PI; M.jx = cos(a) * 3100; M.jy = sin(a) * 3100;
       for (let k = 0; k < 3; k++) this.allies.push({ id: this.id(), k: 'fr', x: -cos(a) * 300 + (k - 1) * -sin(a) * 140, y: -sin(a) * 300 + (k - 1) * cos(a) * 140, a, hp: 34 + 5 * L, mhp: 34 + 5 * L, r: 34, spd: 48 });
@@ -178,6 +181,14 @@ class Room {
     if (M.type === 'hostages') {
       M.pods = 4; M.need = 3;
       for (let k = 0; k < 4; k++) { const a = k * PI / 2 + rnd(-0.5, 0.5), d = rnd(650, 1700); const p = { id: this.id(), k: 'pod', x: cos(a) * d, y: sin(a) * d, a: 0, hp: 8, mhp: 8, r: 16, resc: 0 }; this.allies.push(p); for (let g = 0; g < 1 + floor(L / 3); g++) this.addEnemy(L >= 3 ? 4 : 0, p.x + rnd(-150, 150), p.y + rnd(-150, 150), L, 'pir'); }
+    }
+    if (M.type === 'passengers') {   // v5: long, narrow asteroid corridor; fly to the far end, pick up the passengers, bring them back
+      M.bx = 4000; M.by = 640; M.sx = -3600; M.px = 3600; M.pax = 0; M.trickle = 7; M.fac = 'pir';
+      const sh = this.ship; sh.x = M.sx; sh.y = 0; sh.a = 0; sh.sa = 0; sh.vx = 90; sh.vy = 0; sh.spd = 90;
+      this.allies.push({ id: this.id(), k: 'pax', x: M.px, y: 0, a: PI, hp: 1e6, mhp: 1e6, r: 46 });
+      const rocks = []; let tries = 0;
+      while (rocks.length < 150 && tries++ < 3000) { const x = rnd(-3350, 3350), y = rnd(-M.by + 40, M.by - 40); if (abs(x - M.px) < 330 || abs(x - M.sx) < 300 || rocks.some(q => (q[0] - x) ** 2 + (q[1] - y) ** 2 < 105 * 105)) continue; rocks.push([x, y]); }
+      for (const [x, y] of rocks) { const e = this.addEnemy(10, x, y, L, 'dom', true); e.vx = rnd(-9, 9); e.vy = rnd(-9, 9); }
     }
     if (M.type === 'station') { M.trickle = 24; const a = random() * 2 * PI; this.addEnemy(9, cos(a) * 1900, sin(a) * 1900, L, M.fac, true); M.bossSpawned = 1; this.spawnWave(L, 0, M.fac); }
     if (M.mod === 'asteroids') for (let i = 0; i < 14; i++) { const a = random() * 2 * PI, d = rnd(450, 3500); this.addEnemy(10, cos(a) * d, sin(a) * d, L, 'dom', true); }
@@ -198,7 +209,7 @@ class Room {
   // ----- enemies -----
   addEnemy(type, x, y, L, fac, instant) {
     const T = ETYPES[type], hpm = 1 + 0.2 * (L - 1) + 0.01 * (L - 1) * (L - 1);
-    const e = { id: this.id(), type, x: clamp(x, -ARENA + 80, ARENA - 80), y: clamp(y, -ARENA + 80, ARENA - 80), vx: 0, vy: 0, a: random() * 2 * PI, hp: T.hp * hpm, mhp: T.hp * hpm, r: T.r, L, fac: fac || 'dom',
+    const e = { id: this.id(), type, x: clamp(x, -this.bnd()[0] + 80, this.bnd()[0] - 80), y: clamp(y, -this.bnd()[1] + 80, this.bnd()[1] - 80), vx: 0, vy: 0, a: random() * 2 * PI, hp: T.hp * hpm, mhp: T.hp * hpm, r: T.r, L, fac: fac || 'dom',
       cd: rnd(0.6, 2.2), warp: instant ? 0 : 0.8, orbit: random() < 0.5 ? 1 : -1, paint: 0, spot: 0, tgt: null, tgtT: 0, sh: 0, shm: 0, shT: 9 };
     if (T.sh) e.sh = e.shm = T.sh * (1 + 0.12 * (L - 1)) * (T.sz >= 3 && L < 8 ? 0.6 : 1);
     if (type === 10) { e.r = rnd(26, 46); e.vx = rnd(-25, 25); e.vy = rnd(-25, 25); e.spin = rnd(-1, 1); }
@@ -209,9 +220,26 @@ class Room {
     }
     this.enemies.push(e); return e;
   }
-  spawnWave(L, w, fac, anchor) {
+  // v5: enemies only ever appear at a dock of a hostile ship or at the edge of the map (never mid-field)
+  spawnPoint(anchor, o = {}) {
+    const [bx, by] = this.bnd(), s = this.ship, docks = [];
+    for (const e of this.enemies) if (!e.dead && e.ports) e.ports.forEach((p, k) => { if (p.hp > 0 && ETYPES[e.type].ports[k].w === 'dock') docks.push(this.portPos(e, k)); });
+    if (docks.length && random() < 0.65 && !o.end) { const d = pick(docks); return { x: d[0], y: d[1], edge: 0 }; }
+    const narrow = bx > by * 2.5; let best = null, bq = 1e18;
+    for (let i = 0; i < 10; i++) {
+      let x, y, side = floor(random() * 4);
+      if (narrow) { x = (o.end || (random() < 0.5 ? 1 : -1)) * (bx - 100); y = rnd(-by + 100, by - 100); }
+      else if (side < 2) { x = (side ? 1 : -1) * (bx - 100); y = rnd(-by + 100, by - 100); } else { y = (side === 2 ? 1 : -1) * (by - 100); x = rnd(-bx + 100, bx - 100); }
+      const q = (x - anchor.x) ** 2 + (y - anchor.y) ** 2, far = (x - s.x) ** 2 + (y - s.y) ** 2 > (o.minShip || 1100) ** 2;
+      if (far && q < bq) { bq = q; best = { x, y, edge: 1 }; }
+    }
+    if (!best) { const a = random() * 2 * PI; best = { x: clamp(cos(a) * 1e5, -bx + 100, bx - 100), y: clamp(sin(a) * 1e5, -by + 100, by - 100), edge: 1 }; }
+    return best;
+  }
+  spawnWave(L, w, fac, anchor, o = {}) {
     const A = anchor || this.ship;
-    let budget = min(26, 2 + ceil(L * 0.9) + floor(w * 1.5)), bigs = 0; const maxBig = min(4, 1 + floor(L / 4));
+    let budget = o.budget || min(26, 2 + ceil(L * 0.9) + floor(w * 1.5)), bigs = 0; const maxBig = min(4, 1 + floor(L / 4));
+    let sp = this.spawnPoint(A, o), left = 0;
     const pool = [];
     const add = (t, wt) => { if (ETYPES[t].minL <= L || ETYPES[t].minL === 99) pool.push([t, wt]); };
     if (fac === 'pir') { add(4, 4); add(1, 2); add(0, 1); if (L >= 2) add(5, 1); if (L >= 3) { add(11, 1); add(6, 1.2); } if (L >= 6) add(15, 0.8); if (L >= 8) add(7, 0.5); if (L >= 10) add(16, 0.3); }
@@ -221,8 +249,8 @@ class Room {
       let r = random() * tot, t = pool[0][0]; for (const p of pool) { r -= p[1]; if (r <= 0) { t = p[0]; break; } }
       const sz = ETYPES[t].sz;
       if (sz >= 1) { if (bigs >= maxBig) t = 1; else { bigs++; budget -= [0, 2, 4, 7][sz]; } }
-      const a = random() * 2 * PI, d = rnd(950, 1300) + ETYPES[t].r;
-      this.addEnemy(t, A.x + cos(a) * d, A.y + sin(a) * d, L, fac); budget--;
+      if (--left < 0) { if (random() < 0.5 || !sp) sp = this.spawnPoint(A, o); left = floor(rnd(1, 4)); }
+      const e = this.addEnemy(t, sp.x + rnd(-110, 110), sp.y + rnd(-110, 110), L, fac); if (sp.edge) e.rush = 1; budget--;
     }
   }
   bossType(L) { return L < 6 ? 7 : L < 10 ? 16 : L < 14 ? 8 : 17; }
@@ -284,6 +312,7 @@ class Room {
     if (!m) m = this.failStreak >= 2 ? this.options[1] : this.options[0];
     return m;
   }
+  bnd() { const M = this.mission; return M && M.bx ? [M.bx, M.by] : [ARENA, ARENA]; }
   hostiles() { let n = 0; for (const e of this.enemies) if (e.type !== 10 && !e.dead) n++; return n; }
   missionLogic() {
     const M = this.mission, s = this.ship; if (!M) return; M.time += DT;
@@ -294,7 +323,7 @@ class Room {
         M.waveT -= DT;
         if (M.waveT <= 0 || M.type === 'defend' && M.waveT < -18) {
           if (M.wave < M.waves) { M.wave++; const anc = M.type === 'defend' ? this.allies.find(a => a.k === 'fs') : null; this.spawnWave(L, M.wave - 1, M.fac, anc); M.waveT = 1.5; this.ev('wave', M.wave); return; }
-          if (M.type === 'flagship' && !M.bossSpawned) { M.bossSpawned = 1; const a = random() * 2 * PI; this.addEnemy(this.bossType(L), s.x + cos(a) * 1300, s.y + sin(a) * 1300, L, 'dom'); this.spawnWave(L, 0, 'dom'); this.ev('boss'); return; }
+          if (M.type === 'flagship' && !M.bossSpawned) { M.bossSpawned = 1; { const sp = this.spawnPoint(s), bo = this.addEnemy(this.bossType(L), sp.x, sp.y, L, 'dom'); bo.rush = 1; } this.spawnWave(L, 0, 'dom'); this.ev('boss'); return; }
           if (H === 0) this.endMission(true);
         }
       } else if (M.type === 'defend') M.waveT -= DT;
@@ -311,6 +340,12 @@ class Room {
       const alive = this.allies.filter(a => a.k === 'fr').length;
       if (!alive) this.endMission(M.got >= 1);
     }
+    if (M.type === 'passengers') {
+      const px = this.allies.find(a => a.k === 'pax');
+      if (!M.pax && px && d2(px, s) < 150 * 150) { M.pax = 1; px.dead = 1; this.grant(6 * DIFFS[M.diff].m); this.ev('pax', round(px.x), round(px.y)); this.spawnWave(L, 0, 'pir', s, { budget: min(7, 2 + floor(L / 3)), end: 1 }); M.trickle = 16; }
+      M.trickle -= DT; if (M.trickle <= 0 && H < 4) { M.trickle = 20; this.spawnWave(L, 0, 'pir', s, { budget: min(6, 1 + ceil(L / 3)), end: M.pax ? -1 : 1 }); }
+      if (M.pax && s.x < M.sx + 420) this.endMission(true);
+    }
     if (M.type === 'hostages') {
       M.trickle -= DT; if (M.trickle <= 0 && H < 10) { M.trickle = 16; this.spawnWave(L, 0, 'pir'); }
       if (M.lost > M.pods - M.need) return this.endMission(false);
@@ -320,7 +355,7 @@ class Room {
   // ----- ship -----
   inp(i) { return this.seats[i].cur; }
   up(i) { return !this.ship.sec[i].dn; }
-  busy(i) { return this.seats[i].cur.as && this.up(i); }
+  busy(i) { return false; }
   can(i) { return this.up(i) && !this.busy(i); }
   shieldUp() { const s = this.ship; return this.up(SHIELD) && s.shDown <= 0 && s.shp > 0; }
   secDamaged(k) { return this.secExists(k) && this.ship.sec[k].hp < this.secMax(k) - 1e-6; }
@@ -344,12 +379,11 @@ class Room {
     const s = this.ship;
     if (a === 'q' || a === 'e' || a === 'r') return this.useAbility(i, 'qer'.indexOf(a));
     if (i === REPAIR && a === 'dr') { if (this.up(REPAIR)) { s.droneOff = s.droneOff ? 0 : 1; this.ev('dr', s.droneOff); } return; }
-    if (i === ENG && this.can(ENG) && a[0] === 'p') {
-      const k = +a[1] - 1, P = s.pip;
-      if (k === 3) { s.pip = [2, 2, 2]; this.ev('pip'); return; }
-      if (k < 0 || k > 2 || P[k] >= 4) return;
-      let j = -1; for (let q = 0; q < 3; q++) if (q !== k && P[q] > 0 && (j < 0 || P[q] > P[j])) j = q;
-      if (j >= 0) { P[j]--; P[k]++; this.ev('pip'); }
+    if (i === ENG && this.up(ENG)) {   // v5: u1-u4 add a slot to an option, d1-d4 remove one, z clears (max 10 in total)
+      const P = s.pip, k = +a[1] - 1;
+      if (a === 'z') { s.pip = [0, 0, 0, 0]; this.ev('pip'); return; }
+      if (a[0] === 'u' && k >= 0 && k < 4 && this.rrUsed() < RR_CFG.max && P[k] < RR_CFG.max) { P[k]++; this.ev('pip'); }
+      else if (a[0] === 'd' && k >= 0 && k < 4 && P[k] > 0) { P[k]--; this.ev('pip'); }
     }
   }
   useAbility(i, slot) {
@@ -371,7 +405,10 @@ class Room {
       case 'overcharge': seat.bf.over = 4; break;
       case 'paint': { const pt = { x: I.ax, y: I.ay }; const tg = live().sort((a, b) => d2(a, pt) - d2(b, pt))[0]; if (!tg) return; tg.paint = 6; this.ev('paint', tg.id); break; }
       case 'burner': s.burn = 2.5 + this.S(ENG, 'burn'); if (this.S(ENG, 'burn')) s.inv = max(s.inv, 0.6); break;
-      case 'bomb': case 'seismic': { const big = ab === 'seismic'; let dx = I.ax - s.x, dy = I.ay - s.y, d = hypot(dx, dy) || 1; const r = min(d, 650); this.bombs.push({ id: this.id(), x: s.x, y: s.y, tx: s.x + dx / d * r, ty: s.y + dy / d * r, rad: (big ? 300 : 150) * (1 + this.S(ENG, 'bombRad')), dmg: (big ? 22 : 10) * (1 + this.S(ENG, 'bombDmg')), cl: !big && this.S(ENG, 'bombRad') > 0, spd: big ? 420 : 520 }); this.ev('bl'); break; }
+      case 'bomb': case 'seismic': { const big = ab === 'seismic'; let dx = I.ax - s.x, dy = I.ay - s.y, d = hypot(dx, dy) || 1; const r = min(d, 650), nb = 1 + (big ? 0 : round(this.S(ENG, 'bombN')));
+        for (let q = 0; q < nb; q++) { const aa = atan2(dy, dx) + (q - (nb - 1) / 2) * 0.22, rr_ = r * (1 - 0.06 * q);
+          this.bombs.push({ id: this.id(), x: s.x, y: s.y, tx: s.x + cos(aa) * rr_, ty: s.y + sin(aa) * rr_, rad: (big ? 300 : BOMB_CFG.rad) * (1 + this.S(ENG, 'bombRad')), dmg: (big ? 22 : BOMB_CFG.dmg) * (1 + this.S(ENG, 'bombDmg')), cl: !big && this.S(ENG, 'bombRad') > 0, spd: big ? 420 : 520 }); }
+        cd *= 1 - min(0.5, this.S(ENG, 'bombCd')); this.ev('bl'); break; }
       case 'bubble': s.bubble = 2; break;
       case 'lance': case 'nova': {
         if (!this.shieldUp()) return; const nova = ab === 'nova', half = nova ? PI : max(this.shieldArc() / 2, 22) * PI / 180;
@@ -388,7 +425,7 @@ class Room {
       case 'barrage': seat.barr = 3; seat.barrT = 0; break;
       case 'deadeye': seat.dead = 5; break;
       case 'suppress': seat.bf.supp = dur(5); break;
-      case 'warp': { const ox = s.x, oy = s.y, B = ARENA - 60; s.x = clamp(s.x + cos(aimW) * 380, -B, B); s.y = clamp(s.y + sin(aimW) * 380, -B, B); s.inv = max(s.inv, 1); this.ev('warp', round(ox), round(oy), round(s.x), round(s.y)); break; }
+      case 'warp': { const ox = s.x, oy = s.y, [BX_, BY_] = this.bnd(); s.x = clamp(s.x + cos(aimW) * 380, -BX_ + 60, BX_ - 60); s.y = clamp(s.y + sin(aimW) * 380, -BY_ + 60, BY_ - 60); s.inv = max(s.inv, 1); this.ev('warp', round(ox), round(oy), round(s.x), round(s.y)); break; }
       case 'surge': { const d = dur(3); for (const st of this.seats) { for (const k in st.cd) st.cd[k] -= 4; st.bf.surge = d; } break; }
       case 'aegis': s.aegis = dur(4); break;
       case 'reboot': if (s.shDown <= 0 || !this.up(SHIELD)) return; s.shDown = 0; s.shp = s.shm * 0.6; this.ev('shu'); break;
@@ -407,27 +444,32 @@ class Room {
     for (const k in s.gp) s.gp[k] -= DT;
     s.roll = (s.roll || 0) * 0.9; s.beam = {};
     const up = i => !s.sec[i].dn;
-    // energy
+    // energy (v5): only the Engineer's rerouting uses it. Each filled slot drains it, more slots drain faster per slot. Depleted = 20 s lockout: rerouting off, 25% engine thrust.
     const aux = this.portEff(ENG, 'aux');
     s.em = 100 + this.S(ENG, 'emax') + 25 * aux;
-    const regen = 3.2 * (1 + this.S(ENG, 'regen')) * (1 + 0.35 * aux) * (up(ENG) ? 1 : 0.6);
-    s.en = min(s.em, s.en + regen * DT);
+    const regen = RR_CFG.base * min(RR_CFG.regenCap, 1 + this.S(ENG, 'regen') + 0.35 * aux) * (up(ENG) ? 1 : 0.6);
+    if (s.lock > 0) { s.lock -= DT; s.en = min(s.em, s.en + s.em / RR_CFG.lock * DT); if (s.lock <= 0) { s.lock = 0; s.en = s.em; this.ev('pwr', 1); } }
+    else {
+      const drain = up(ENG) ? RR_CFG.base * RR_CFG.drain[this.rrUsed()] : 0;
+      s.en = min(s.em, s.en + (regen - drain) * DT);
+      if (s.en <= 0) { s.en = 0; s.lock = RR_CFG.lock; this.ev('pwr', 0); }
+    }
     // helm: pilot only. Cockpit destroyed => the ship keeps its heading, no steering at all
     if (this.can(PILOT)) {
-      const turn = 1.7 * (1 - 0.1 * mk) * (1 + this.S(PILOT, 'turn')) * (this.bf(PILOT, 'stim') ? 1.4 : 1) * sqrt(this.pipF(0));
+      const turn = 1.7 * (1 - 0.1 * mk) * (1 + this.S(PILOT, 'turn')) * (this.bf(PILOT, 'stim') ? 1.4 : 1) * 1;
       const dx = P.ax - s.x, dy = P.ay - s.y; if (dx * dx + dy * dy > 900) s.a = wrap(s.a + clamp(wrap(atan2(dy, dx) - s.a), -turn * DT, turn * DT));
     }
     // speed: engineer only. Engines destroyed => slow stall to zero
     if (this.can(ENG)) s.thr = clamp(E.thr, 0.25, 1);
     const maxSp = 185 * (1 - 0.06 * mk) * (1 + this.S(ENG, 'speed')) * this.pipF(0) * (this.bf(ENG, 'stim') ? 1.25 : 1);
-    if (up(ENG)) { const tgt = maxSp * s.thr * (s.burn > 0 ? 1.8 : 1) * (s.reroute > 0 ? 0.6 : 1); s.spd += clamp(tgt - s.spd, -170 * DT, 170 * DT); }
+    if (up(ENG)) { const cap = s.lock > 0 ? RR_CFG.lockThr : 1, ac = 170 * (1 + RR_CFG.acc * this.rrLv(0) * (1 + this.S(ENG, 'pipEff'))) * DT; const tgt = maxSp * min(s.thr, cap) * (s.burn > 0 && s.lock <= 0 ? 1.8 : 1); s.spd += clamp(tgt - s.spd, -ac, ac); }
     else { const tgt = maxSp * this.S(ENG, 'limp') * s.thr; s.spd = s.spd > tgt ? max(tgt, s.spd - 22 * DT) : tgt; }
     const k = min(1, 2.4 * DT);
     s.vx += (cos(s.a) * s.spd - s.vx) * k; s.vy += (sin(s.a) * s.spd - s.vy) * k;
     s.x += s.vx * DT; s.y += s.vy * DT;
-    const B = ARENA - 40;
-    if (s.x < -B || s.x > B) { s.x = clamp(s.x, -B, B); s.vx = -s.vx * 0.5; s.a = wrap(PI - s.a); }
-    if (s.y < -B || s.y > B) { s.y = clamp(s.y, -B, B); s.vy = -s.vy * 0.5; s.a = wrap(-s.a); }
+    const [BX, BY] = this.bnd(), BXm = BX - 40, BYm = BY - 40;
+    if (s.x < -BXm || s.x > BXm) { s.x = clamp(s.x, -BXm, BXm); s.vx = -s.vx * 0.5; s.a = wrap(PI - s.a); }
+    if (s.y < -BYm || s.y > BYm) { s.y = clamp(s.y, -BYm, BYm); s.vy = -s.vy * 0.5; s.a = wrap(-s.a); }
     // nose laser + pilot ports
     if (this.can(PILOT) && P.f && s.nose <= 0) {
       const rate = 2.6 * (1 + this.S(PILOT, 'nRate')) * (this.bf(PILOT, 'stim') ? 1.4 : 1) * this.crewM(PILOT) * (s.strafe > 0 ? 3 : 1) * ((s.sec[GUNL].dn || s.sec[GUNR].dn) ? 1.4 : 1);
@@ -459,7 +501,6 @@ class Room {
       const pd = 12 + this.S(gi, 'pd'), brk = 1 + this.S(gi, 'sBreak'), crit = this.S(gi, 'crit');
       if (G.f && s[cdk] <= 0) {
         let rate = 2.8 * (1 + this.S(gi, 'rof')) * this.crewM(gi) * (sb.rapid > 0 ? 2 : 1) * (rr ? 1.5 : rh ? 1.25 : 1) * stim * (s.sec[other].dn ? 1.25 : 1) * (sb.supp > 0 ? 1.6 : 1);
-        if (s.en >= 0.5) s.en -= 0.5; else rate *= 0.5;
         s[cdk] = 1 / rate;
         let pier = this.S(gi, 'pierce') + (sb.supp > 0 ? 1 : 0), dm = dmgM * (random() < crit ? 2 : 1);
         if (seat.dead > 0) { dm *= 4; pier += 2; seat.dead--; }
@@ -480,11 +521,11 @@ class Room {
     }
     // shield: blue arc aimed in WORLD space by the shield player (ship turning does not move it)
     s.shm = this.shieldMax(); if (s.shp > s.shm) s.shp = s.shm;
-    if (s.shDown > 0) { s.shDown -= DT; if (s.shDown <= 0) { s.shDown = 0; s.shp = s.shm; this.ev('shu'); } }
+    if (s.shDown > 0) { s.shDown -= DT * this.pipF(2); if (s.shDown <= 0) { s.shDown = 0; s.shp = s.shm; this.ev('shu'); } }
     s.shHit += DT;
     if (s.shDown <= 0 && s.shHit > 3) s.shp = min(s.shm, s.shp + (0.12 + this.S(SHIELD, 'shRegen') + 0.1 * this.portEff(SHIELD, 'capbank')) * this.pipF(2) * DT);
     if (this.can(SHIELD)) {
-      const tgt = atan2(Sh.ay - s.y, Sh.ax - s.x), spin = 3 * (1 + this.S(SHIELD, 'shSpin')) * (this.bf(SHIELD, 'stim') ? 1.4 : 1) * sqrt(this.pipF(2));
+      const tgt = atan2(Sh.ay - s.y, Sh.ax - s.x), spin = 3 * (1 + this.S(SHIELD, 'shSpin')) * (this.bf(SHIELD, 'stim') ? 1.4 : 1) * 1;
       s.sa = wrap(s.sa + clamp(wrap(tgt - s.sa), -spin * DT, spin * DT));
     }
     // engineer port: mines
@@ -493,7 +534,7 @@ class Room {
     // The repair player clicks a damaged section (R.rt) to start it; it then heals automatically. A per-section minigame (client side, reported as R.mb 0..1) adds
     // up to +100%, and DISABLING the drone adds +50%. The repair player can never repair the Repair Bay while it is destroyed (and can do nothing at all then).
     // Everybody else can only help with the Repair Bay itself: rapid clicks (ck) and bot helpers.
-    const rq = (1 + this.S(REPAIR, 'rep')) * (this.bf(REPAIR, 'cry') ? 1.25 : 1) * (this.bf(REPAIR, 'rally') ? 1.3 : 1) * (this.bf(REPAIR, 'stim') ? 1.4 : 1);
+    const rq = this.pipF(3) * (1 + this.S(REPAIR, 'rep')) * (this.bf(REPAIR, 'cry') ? 1.25 : 1) * (this.bf(REPAIR, 'rally') ? 1.3 : 1) * (this.bf(REPAIR, 'stim') ? 1.4 : 1);
     const T = s.task;
     if (this.can(REPAIR)) {
       const rt = R.rt, valid = (rt >= 0 && rt < NSEC && this.secDamaged(rt)) || (rt === HULL_T && s.hull < s.hm - 0.05);
@@ -522,30 +563,35 @@ class Room {
     if (this.big(REPAIR, 'b_auto')) for (let k = 0; k < NSEC; k++) if (this.secExists(k) && s.sec[k].dn) this.healSec(k, this.secMax(k) / 40 * DT);
     // drones: out whenever the repair bay works and the repair player has not disabled them (they may fly while the ship is damaged)
     const nD = min(6, (!s.droneOff && up(REPAIR) ? 1 + this.S(REPAIR, 'drones') + (this.portEff(REPAIR, 'drone2') > 0 ? 1 : 0) : 0) + (s.swarm > 0 && up(REPAIR) ? 3 : 0));
-    const dl = (1 + this.S(REPAIR, 'dDmg')) * (this.portEff(REPAIR, 'drone2') || 1), dhp = 3 + this.S(REPAIR, 'dHp');
-    const drate = 2 * (1 + this.S(REPAIR, 'dRate')) * (s.dod > 0 ? 3 : 1) * this.crewM(REPAIR);
-    while (s.drones.length < 6) s.drones.push({ x: s.x, y: s.y, hp: dhp, on: 0, cd: 0, fc: 0, mc: 3 });
+    // v5: drones are self-controlled little starships. They orbit the ship, dash to the nearest enemy and burn it with a short-range laser beam, and they pick up credits and items.
+    const dl = (1 + this.S(REPAIR, 'dDmg')) * (this.portEff(REPAIR, 'drone2') || 1), dhp = 5 + this.S(REPAIR, 'dHp');
+    const dps = 2.6 * dl * (1 + this.S(REPAIR, 'dRate')) * (s.dod > 0 ? 2 : 1) * this.crewM(REPAIR), BEAM = 190, passM = this.mission && this.mission.type === 'passengers';
+    while (s.drones.length < 6) s.drones.push({ x: s.x, y: s.y, hp: dhp, mhp: dhp, on: 0, cd: 0, fc: 0, mc: 3, a: 0, fi: 0 });
     s.drones.forEach((Dr, k) => {
-      Dr.cd -= DT; Dr.fc -= DT; Dr.mc -= DT;
+      Dr.cd -= DT; Dr.mc -= DT; Dr.fi = 0;
       const want = k < nD && Dr.cd <= 0;
-      if (want && !Dr.on) { Dr.on = 1; Dr.hp = dhp; Dr.x = s.x; Dr.y = s.y; this.ev('launch'); }
+      if (want && !Dr.on) { Dr.on = 1; Dr.hp = Dr.mhp = dhp; Dr.x = s.x; Dr.y = s.y; this.ev('launch'); }
       if (!want && Dr.on) { Dr.on = 0; this.ev('recall'); }
       if (!Dr.on) { Dr.x = s.x; Dr.y = s.y; return; }
-      const oa = k * 1.05 + this.t * 0.5; let tx = R.ax + cos(oa) * 60 * (k > 0 ? 1 : 0), ty = R.ay + sin(oa) * 60 * (k > 0 ? 1 : 0); const ddx = tx - s.x, ddy = ty - s.y, dd = hypot(ddx, ddy);
-      if (dd > 650) { tx = s.x + ddx / dd * 650; ty = s.y + ddy / dd * 650; }
-      const vx = tx - Dr.x, vy = ty - Dr.y, vd = hypot(vx, vy) || 1, sp = min(320 * (s.dod > 0 ? 1.5 : 1), vd * 4);
+      Dr.mhp = dhp;
+      let tg = null, bd = 620 * 620;
+      for (const e of this.enemies) { if (e.dead || e.warp > 0) continue; if (e.type === 10 && !(passM && d2(e, s) < 330 * 330)) continue; const q = d2(e, Dr) + d2(e, s) * 0.3; if (q < bd && d2(e, s) < 700 * 700) { bd = q; tg = e; } }
+      let pk = null; if (!tg || d2(tg, Dr) > 260 * 260) { let pd = 520 * 520; for (const p of this.picks) { if (p.dead) continue; const q = d2(p, Dr); if (q < pd && d2(p, s) < 800 * 800) { pd = q; pk = p; } } }
+      const oa = k * 1.05 + this.t * 0.6, hx = s.x + cos(oa) * (95 + 24 * k), hy = s.y + sin(oa) * (95 + 24 * k);
+      let gx = hx, gy = hy, face = Dr.a;
+      if (pk && !tg) { gx = pk.x; gy = pk.y; }
+      else if (tg) { const ex = tg.x - Dr.x, ey = tg.y - Dr.y, ed = hypot(ex, ey) || 1, stand = (tg.r || 20) * (ETYPES[tg.type].mp ? 0.7 : 0.4) + 120; gx = tg.x - ex / ed * stand; gy = tg.y - ey / ed * stand; }
+      const vx = gx - Dr.x, vy = gy - Dr.y, vd = hypot(vx, vy) || 1, sp = min(340 * (s.dod > 0 ? 1.5 : 1), vd * 4);
       Dr.x += vx / vd * sp * DT; Dr.y += vy / vd * sp * DT;
-      if (Dr.fc <= 0) {
-        let best = null, bd = 420 * 420; for (const e of this.enemies) { if (e.dead || e.warp > 0 || e.type === 10) continue; const q = d2(e, Dr); if (q < bd) { bd = q; best = e; } }
-        if (best) { Dr.fc = 1 / drate; this.addBolt(Dr.x, Dr.y, atan2(best.y - Dr.y, best.x - Dr.x), 700, 0.7 * dl, 0, 3, 0.6, 12); if (this.S(REPAIR, 'dMsl') && Dr.mc <= 0) { Dr.mc = 3; this.pp.push({ id: this.id(), x: Dr.x, y: Dr.y, vx: 0, vy: 0, spd: 380, home: 4, tgt: best.id, dmg: 3 * dl, life: 3.5, k: 'dart', splash: 40 }); } }
-      }
+      face = tg ? atan2(tg.y - Dr.y, tg.x - Dr.x) : (vd > 12 ? atan2(vy, vx) : s.a); Dr.a = wrap(Dr.a + clamp(wrap(face - Dr.a), -7 * DT, 7 * DT));
+      if (tg && d2(tg, Dr) < (BEAM + (tg.r || 0) * 0.6) ** 2 && abs(wrap(face - Dr.a)) < 0.4) { Dr.fi = 1; this.fireBeam(100 + k, Dr.x, Dr.y, Dr.a, dps, 1, BEAM + (tg.r || 0) * 0.6); if (this.S(REPAIR, 'dMsl') && Dr.mc <= 0) { Dr.mc = 3; this.pp.push({ id: this.id(), x: Dr.x, y: Dr.y, vx: 0, vy: 0, spd: 380, home: 4, tgt: tg.id, dmg: 3 * dl, life: 3.5, k: 'dart', splash: 40 }); } }
     });
     // shield drone port
     const SD = s.sdr, sdf = this.portEff(REPAIR, 'sdrone'); SD.cd -= DT; SD.on = sdf > 0 && SD.cd <= 0 && up(REPAIR); SD.a += 2 * DT; SD.mhp = 3 + 2 * sdf;
     if (SD.on) { const rr = g.sr + 24; SD.x = s.x + cos(SD.a) * rr; SD.y = s.y + sin(SD.a) * rr; }
   }
-  fireBeam(k, px, py, a, dps, brk) {
-    const s = this.ship, L = 330, cx = cos(a), cy = sin(a); let hitD = L, hitE = null, hitP = -1;
+  fireBeam(k, px, py, a, dps, brk, L = 330) {
+    const s = this.ship, cx = cos(a), cy = sin(a); let hitD = L, hitE = null, hitP = -1;
     for (const e of this.enemies) {
       if (e.dead || e.warp > 0) continue;
       const ex = e.x - px, ey = e.y - py, t = ex * cx + ey * cy; if (t < -e.r || t > L + e.r) continue;
@@ -578,7 +624,7 @@ class Room {
   pickTarget(e) {
     e.tgtT -= DT; if (e.tgt && e.tgtT > 0 && !e.tgt.dead) return e.tgt;
     e.tgtT = 2; let t = this.ship.dead ? null : this.ship;
-    if (this.allies.length && random() < (this.mission && this.mission.type === 'defend' ? 0.55 : 0.4)) { const a = this.allies.filter(a => a.k !== 'pod'); if (a.length) t = pick(a); }
+    if (this.allies.length && random() < (this.mission && this.mission.type === 'defend' ? 0.55 : 0.4)) { const a = this.allies.filter(a => a.k !== 'pod' && a.k !== 'pax'); if (a.length) t = pick(a); }
     return e.tgt = t;
   }
   // hit test against the physical ship (union of section discs); returns section index or -1
@@ -597,9 +643,9 @@ class Room {
       if (e.dead) continue; const T = ETYPES[e.type];
       if (e.warp > 0) { e.warp -= DT; continue; }
       e.paint -= DT; e.shT += DT;
-      if (e.type === 10) { e.x += e.vx * DT; e.y += e.vy * DT; e.a += e.spin * DT; if (d2(e, s) < (e.r + g.hr) ** 2 && !s.dead) { this.hitShip(e.x, e.y, 1, 2, null); this.damageEnemy(e, -1, 99); } continue; }
+      if (e.type === 10) { e.x += e.vx * DT; e.y += e.vy * DT; e.a += e.spin * DT; { const [RBX, RBY] = this.bnd(); if (abs(e.x) > RBX - e.r) { e.vx = -e.vx; e.x = clamp(e.x, -RBX + e.r, RBX - e.r); } if (abs(e.y) > RBY - e.r) { e.vy = -e.vy; e.y = clamp(e.y, -RBY + e.r, RBY - e.r); } } if (d2(e, s) < (e.r + g.hr) ** 2 && !s.dead) { this.hitShip(e.x, e.y, 1, 2, null); this.damageEnemy(e, -1, 99); } continue; }
       const tg = this.phase === 'mission' ? this.pickTarget(e) : null; if (!tg) { e.vx *= 0.98; e.vy *= 0.98; e.x += e.vx * DT; e.y += e.vy * DT; continue; }
-      const dx = tg.x - e.x, dy = tg.y - e.y, d = hypot(dx, dy) || 1, ta = atan2(dy, dx), spd = T.spd * (1 + 0.015 * L);
+      const dx = tg.x - e.x, dy = tg.y - e.y, d = hypot(dx, dy) || 1, ta = atan2(dy, dx), spd = T.spd * (1 + 0.015 * L) * (e.rush && d > 1300 ? (T.spd < 80 ? 6 : 2.4) : 1);
       let vx, vy;
       if (e.type === 5) { vx = dx / d * spd; vy = dy / d * spd; if (d < e.r + (tg.r || g.hr) + 4) { if (tg === s) this.hitShip(e.x, e.y, 2, 2, null); else tg.hp -= 6; this.killEnemy(e, 0); continue; } }
       else if (T.spd === 0) { vx = 0; vy = 0; }
@@ -611,7 +657,7 @@ class Room {
       const tf = T.mp ? 0.4 : 3, desired = (e.type === 5 || !T.mp) && T.g && !T.g.turret ? ta : atan2(vy, vx);
       e.a = wrap(e.a + clamp(wrap((T.mp ? ta : desired) - e.a), -tf * DT, tf * DT));
       const k = min(1, 2 * DT); e.vx += (vx - e.vx) * k; e.vy += (vy - e.vy) * k;
-      e.x = clamp(e.x + e.vx * DT, -ARENA, ARENA); e.y = clamp(e.y + e.vy * DT, -ARENA, ARENA);
+      const [EBX, EBY] = this.bnd(); e.x = clamp(e.x + e.vx * DT, -EBX, EBX); e.y = clamp(e.y + e.vy * DT, -EBY, EBY);
       e.ramT = (e.ramT || 0) - DT;
       if (!T.mp && d2(e, s) < (e.r + g.hr) ** 2 && !s.dead && e.ramT <= 0) { e.ramT = 1.2; if (s.burn > 0 && this.S(ENG, 'ram')) this.damageEnemy(e, -1, 12); else { this.hitShip(e.x, e.y, 1, 1, null); this.damageEnemy(e, -1, 3); } }
       if (this.phase !== 'mission' || s.dead) continue;
@@ -745,14 +791,21 @@ class Room {
       if (a.k === 'pod' && M && this.phase === 'mission' && !s.dead) {
         if (d2(a, s) < 110 * 110) { a.resc += DT; if (a.resc > 1.0) { a.dead = 1; M.got++; this.grant(6 * DIFFS[M.diff].m); this.ev('resc', round(a.x), round(a.y)); } } else a.resc = max(0, a.resc - DT);
       }
-      if (a.k === 'fs') a.a += 0.1 * DT;
+      if (a.k === 'fs') {
+        a.a += 0.1 * DT;   // v5: the station defends itself with four gun turrets
+        let tg = null, bd = 800 * 800; for (const e of this.enemies) { if (e.dead || e.warp > 0 || e.type === 10) continue; const q = d2(e, a); if (q < bd) { bd = q; tg = e; } }
+        if (tg && this.phase === 'mission') {
+          const ta = atan2(tg.y - a.y, tg.x - a.x); a.ta = wrap(a.ta + clamp(wrap(ta - a.ta), -4 * DT, 4 * DT));
+          for (let q = 0; q < 4; q++) { a.gc[q] -= DT; if (a.gc[q] <= 0 && abs(wrap(ta - a.ta)) < 0.3) { a.gc[q] = 1.1 + 0.1 * q; const ma = a.a + q * PI / 2, mx = a.x + cos(ma) * 84, my = a.y + sin(ma) * 84, aa = atan2(tg.y - my, tg.x - mx); this.addBolt(mx + cos(aa) * 12, my + sin(aa) * 12, aa, BOLT_SPD, 1.4 * (1 + 0.06 * (M ? M.level : 1)), 0, 1, GUN_LIFE * 0.85); a.gi = 0.12; } }
+        } a.gi = max(0, (a.gi || 0) - DT);
+      }
     }
     this.allies = this.allies.filter(a => !a.dead);
     // pickups: credit chips and cores
     const mag = 150 * (1 + 1.5 * (this.portEff(ENG, 'tractor') > 0 ? 1 : 0)) * (1 + this.S(REPAIR, 'magnet'));
     for (const p of this.picks) {
       p.life -= DT; if (p.life <= 0) { p.dead = 1; continue; }
-      let col = null; if (!s.dead && d2(p, s) < mag * mag) col = s; else for (const Dr of s.drones) if (Dr.on && this.S(REPAIR, 'magnet') > 0 && d2(p, Dr) < 120 * 120) col = Dr;
+      let col = null; if (!s.dead && d2(p, s) < mag * mag) col = s; else for (const Dr of s.drones) if (Dr.on && d2(p, Dr) < (70 * (1 + this.S(REPAIR, 'magnet'))) ** 2) col = Dr;
       if (col) { const dx = col.x - p.x, dy = col.y - p.y, d = hypot(dx, dy) || 1; p.x += dx / d * 560 * DT; p.y += dy / d * 560 * DT; if (d < 30) { p.dead = 1; if (p.k === 'core') { this.cores++; this.ev('core'); } else this.grant(p.v); this.ev('pick', p.k === 'core' ? 1 : 0, p.v); } }
       else { p.x += p.vx * DT; p.y += p.vy * DT; p.vx *= 0.97; p.vy *= 0.97; }
     }
@@ -792,7 +845,7 @@ class Room {
   }
   shieldHit(b) {
     const s = this.ship, dmg = (b.sd || 1) * (s.fort > 0 ? 0.5 : 1) * (s.bubble > 0 ? 0.5 : 1); s.shp -= dmg; s.shHit = 0;
-    s.en = min(s.em, s.en + (b.hv ? 4 : 2) * (1 + this.S(SHIELD, 'absorb')) * this.pipF(2));
+    s.en = min(s.em, s.en + (b.hv ? 4 : 2) * (1 + this.S(SHIELD, 'absorb')));
     this.ev('blk', round(b.x), round(b.y), b.t);
     const refl = this.S(SHIELD, 'reflect') + 0.25 * (this.portEff(SHIELD, 'reflect') > 0 ? 1 : 0);
     if (b.t === 0 && random() < refl) this.addBolt(b.x, b.y, atan2(-b.vy, -b.vx), 700, 1.6, 0, 1, 0.9);
@@ -837,6 +890,11 @@ class Room {
       if (M.type === 'hostages') { let bd = 1e18; for (const a of this.allies) if (a.k === 'pod') { const q = d2(a, s); if (q < bd) { bd = q; goal = a; } } }
       if (M.type === 'escort') { const f = this.allies.find(a => a.k === 'fr'); if (f && d2(f, s) > 450 * 450) goal = f; }
       if (M.type === 'defend') { const f = this.allies.find(a => a.k === 'fs'); if (f && d2(f, s) > 600 * 600) goal = f; }
+      if (M.type === 'passengers') {   // fly the corridor: far end first, then home; steer around the rocks ahead
+        const px = M.pax ? M.sx : M.px; goal = { x: px, y: 0 };
+        let ox = 0, oy = 0; for (const e of this.enemies) { if (e.dead || e.type !== 10) continue; const dx = e.x - s.x, dy = e.y - s.y, d = hypot(dx, dy); if (d > 520 || d < 1) continue; const fwd = (dx * cos(s.a) + dy * sin(s.a)) / d; if (fwd < 0.15) continue; const w = (1 - d / 520) * (e.r + 55) / 60; ox -= dx / d * w; oy -= dy / d * w; }
+        const gd = hypot(goal.x - s.x, goal.y - s.y) || 1; goal = { x: s.x + (goal.x - s.x) / gd * 400 + ox * 420, y: s.y + (goal.y - s.y) / gd * 400 + oy * 420 };
+      }
       const tgt = nearest(e => !ETYPES[e.type].mp || M.type !== 'escort') || nr;
       if (!goal && tgt) {
         if (ETYPES[tgt.type].mp) {
@@ -848,6 +906,7 @@ class Room {
       if (!goal) { const pk = this.picks[0]; goal = pk || { x: 0, y: 0 }; }
       b.ax = goal.x; b.ay = goal.y;
       b.f = s.sec[PILOT].dn ? 1 : (tgt && abs(wrap(atan2(tgt.y - s.y, tgt.x - s.x) - s.a)) < 0.25 && d2(tgt, s) < 540 * 540 ? 1 : 0);
+      if (M.type === 'passengers' && !b.f) for (const e of this.enemies) { if (e.dead || e.type !== 10) continue; const dx = e.x - s.x, dy = e.y - s.y; if (dx * dx + dy * dy < 420 * 420 && abs(wrap(atan2(dy, dx) - s.a)) < 0.16) { b.f = 1; break; } }
       useAbs(PILOT, { roll: () => th.length >= 3 && th[0].tti < 0.6, volley: () => near(s, 650).length >= 2, cry: () => near(s, 800).length >= 4, flare: () => missiles.length >= 2, strafe: () => tgt && d2(tgt, s) < 520 * 520, rally: () => near(s, 800).length >= 3 || s.hull < s.hm * 0.5 });
     }
     // gunners
@@ -859,6 +918,7 @@ class Room {
       for (const e of live) { const ang = wrap(atan2(e.y - s.y, e.x - s.x) - s.a); if (abs(wrap(ang - center)) > half) continue; const q = d2(e, s) * (e.paint > 0 ? 0.5 : 1) * (ETYPES[e.type].mp ? 1.4 : 1); if (q < bd) { bd = q; tgt = e; } }
       if (missile && this.S(gi, 'pd') > 0) { b.ax = missile.b.x; b.ay = missile.b.y; b.f = 1; }
       else if (tgt) { const [x, y] = aimPt(tgt), d = sqrt(d2(tgt, s)), lead = d / BOLT_SPD; b.ax = x + (tgt.vx || 0) * lead; b.ay = y + (tgt.vy || 0) * lead; b.f = d < rng ? 1 : 0; }
+      else if (M.type === 'passengers') { let rk = null, rd = 560 * 560; for (const e of this.enemies) { if (e.dead || e.type !== 10) continue; const ang = wrap(atan2(e.y - s.y, e.x - s.x) - s.a); if (abs(wrap(ang - center)) > half) continue; const q = d2(e, s); if (q < rd) { rd = q; rk = e; } } if (rk) { b.ax = rk.x; b.ay = rk.y; b.f = 1; } else b.f = 0; }
       else b.f = 0;
       const close = tgt && d2(tgt, s) < rng * rng;
       useAbs(gi, { rapid: () => close, flak: () => th.length >= 3 || near(s, 220).length >= 2, overcharge: () => close, paint: () => tgt && (ETYPES[tgt.type].mp || tgt.sh > 0), barrage: () => close && (ETYPES[tgt.type].mp || near(s, 500).length >= 3), deadeye: () => close && (ETYPES[tgt.type].mp || tgt.sh > 0), suppress: () => close });
@@ -874,17 +934,27 @@ class Room {
     if (ctl(ENG) && !s.sec[ENG].dn) {
       const b = B(ENG), n = near(s, 800).length, seat = this.seats[ENG];
       const travel = M.type === 'hostages' || M.type === 'escort' || n === 0;
-      b.thr = travel ? 1 : 0.7;
-      const want = s.sec[SHIELD].dn || th.length >= 4 ? [1, 1, 4] : n >= 3 ? [1, 4, 1] : travel ? [4, 1, 1] : [2, 2, 2];
-      if (this.t - (this.lastPip || 0) > 0.6) { for (let k = 0; k < 3; k++) if (s.pip[k] < want[k]) { seat.bacts.push('p' + (k + 1)); this.lastPip = this.t; break; } }
+      b.thr = M.type === 'passengers' ? (n === 0 ? 0.6 : 0.5) : travel ? 1 : 0.7;
+      // rerouting: spend only what the generator can sustain; shield first when it is down, then repairs, guns in a fight, engines when travelling
+      const E = s.en / s.em, budget = s.lock > 0 ? 0 : E > 0.8 ? 4 : E > 0.55 ? 3 : E > 0.3 ? 2 : E > 0.12 ? 1 : 0;
+      const want = [0, 0, 0, 0]; let left = budget; const give = (k, v) => { const g = min(v, left); want[k] += g; left -= g; };
+      if (s.shDown > 0 && this.up(SHIELD)) give(2, 3);
+      if (s.sec.some(c => c.dn) || s.hull < s.hm * 0.6) give(3, 2);
+      if (n >= 1) give(1, 3); else give(0, 3);
+      give(n >= 1 ? 0 : 1, 2);
+      if (this.t - (this.lastPip || 0) > 0.45) {
+        let k = -1; for (let q = 0; q < 4; q++) if (s.pip[q] > want[q] && (k < 0 || s.pip[q] - want[q] > s.pip[k] - want[k])) k = q;
+        if (k >= 0) { seat.bacts.push('d' + (k + 1)); this.lastPip = this.t; }
+        else if (this.rrUsed() < RR_CFG.max) { for (let q = 0; q < 4; q++) if (s.pip[q] < want[q]) { seat.bacts.push('u' + (q + 1)); this.lastPip = this.t; break; } }
+      }
       const sideCount = sd => live.filter(e => { const a = wrap(atan2(e.y - s.y, e.x - s.x) - s.a); return sd > 0 ? a > 0 : a < 0; }).length;
       const rs = sideCount(1) >= sideCount(-1) ? 1 : -1, ra = s.a + rs * PI / 2;
       const bigNear = nearest(e => ETYPES[e.type].mp && d2(e, s) < 620 * 620), cl = nr;
       if (cl) { b.ax = (bigNear || cl).x; b.ay = (bigNear || cl).y; } else { b.ax = s.x + cos(ra) * 200; b.ay = s.y + sin(ra) * 200; }
       const rrAim = () => { if (!cl) return; b.ax = s.x + cos(ra) * 200; b.ay = s.y + sin(ra) * 200; };
       for (let slot = 0; slot < 3; slot++) { const A = this.abilityOf(ENG, slot); if (!A || (seat.cd[A[0]] || 0) > 0) continue; const ab = A[0];
-        if ((ab === 'bomb' && cl && n >= 2 && d2(cl, s) < 600 * 600) || (ab === 'seismic' && bigNear) || (ab === 'burner' && ((travel && n === 0 && M.type !== 'defend') || (th.length >= 3 && s.hull < s.hm * 0.5))) || (ab === 'surge' && n >= 3) || (ab === 'warp' && s.hull < s.hm * 0.35 && n >= 2)) { if (ab === 'warp' && cl) { b.ax = s.x - (cl.x - s.x); b.ay = s.y - (cl.y - s.y); } seat.bacts.push('qer'[slot]); }
-        else if (ab === 'reroute' && n >= 2 && !s.sec[rs > 0 ? GUNR : GUNL].dn) { rrAim(); seat.bacts.push('qer'[slot]); } }
+        if ((ab === 'bomb' && cl && d2(cl, s) < 680 * 680 && (n >= 2 || bigNear || cl.sh > 0)) || (ab === 'seismic' && bigNear) || (ab === 'burner' && ((travel && n === 0 && M.type !== 'defend') || (th.length >= 3 && s.hull < s.hm * 0.5))) || (ab === 'surge' && n >= 3) || (ab === 'warp' && s.hull < s.hm * 0.35 && n >= 2)) { if (ab === 'warp' && cl) { b.ax = s.x - (cl.x - s.x); b.ay = s.y - (cl.y - s.y); } seat.bacts.push('qer'[slot]); }
+        }
     }
     // repair: hit the calibration band, steer the drones, use kit abilities
     if (ctl(REPAIR) && !s.sec[REPAIR].dn) {
@@ -928,14 +998,14 @@ class Room {
     o.sh = { x: round(s.x), y: round(s.y), a: r2(s.a), vx: round(s.vx), vy: round(s.vy), h: r1(s.hull), hm: s.hm,
       sc: s.sec.map((c, k) => this.secExists(k) ? r2(c.hp / this.secMax(k)) : -1), dn: s.sec.map(c => c.dn ? 1 : 0),
       en: round(s.en), em: s.em, sa: r2(s.sa), tl: r2(s.tl), tr: r2(s.tr), thr: r2(s.thr), spd: round(s.spd),
-      burn: s.burn > 0 ? 1 : 0, dr: s.drones.map(d => d.on ? [round(d.x), round(d.y)] : 0), sd: s.sdr.on ? [round(s.sdr.x), round(s.sdr.y)] : 0,
+      burn: s.burn > 0 ? 1 : 0, dr: s.drones.map(d => d.on ? [round(d.x), round(d.y), r2(d.a), r2(d.hp / d.mhp), d.fi] : 0), sd: s.sdr.on ? [round(s.sdr.x), round(s.sdr.y)] : 0,
       tk: [s.task.i, r2(s.task.i >= 0 && s.task.i < NSEC ? s.sec[s.task.i].hp / this.secMax(s.task.i) : s.hull / s.hm), s.droneOff ? 1 : 0, r2(s.task.mult || 0), r2(this.help || 0)],
-      shp: r1(s.shp), shm: r1(s.shm), shd: r1(s.shDown), bub: s.bubble > 0 ? 1 : 0, aeg: s.aegis > 0 ? 1 : 0, fort: s.fort > 0 ? 1 : 0, inv: s.inv > 0 ? 1 : 0, roll: r2(s.roll || 0), dead: s.dead, pip: s.pip,
+      shp: r1(s.shp), shm: r1(s.shm), shd: r1(s.shDown), bub: s.bubble > 0 ? 1 : 0, aeg: s.aegis > 0 ? 1 : 0, fort: s.fort > 0 ? 1 : 0, inv: s.inv > 0 ? 1 : 0, roll: r2(s.roll || 0), dead: s.dead, pip: s.pip, lk: r1(s.lock), eu: this.rrUsed(), rd: round(RR_CFG.base * RR_CFG.drain[this.rrUsed()] * 10) / 10, rg: round(RR_CFG.base * min(RR_CFG.regenCap, 1 + this.S(ENG, 'regen') + 0.35 * this.portEff(ENG, 'aux')) * (this.up(ENG) ? 1 : 0.6) * 10) / 10,
       bm: Object.keys(s.beam).map(k => [+k].concat(s.beam[k])), rr: s.reroute > 0 ? 1 : 0, rear: this.portEff(SHIELD, 'rear') > 0 ? 1 : 0, arc: this.shieldArc(), pa: Object.keys(s.pang).map(k => [+k, r2(s.pang[k])]) };
-    o.e = this.enemies.map(e => [e.id, e.type, round(e.x), round(e.y), r2(e.a), ETYPES[e.type].mp ? 1 : (e.type === 10 ? round(e.r) : r2(max(0, e.hp / e.mhp))), e.warp > 0 ? 1 : 0, e.paint > 0 ? 1 : 0, e.ports ? e.ports.map(p => [r2(p.hp / p.mhp), r2(p.pa), p.ch > 0 ? 1 : 0]) : 0, e.shm ? r2(e.sh / e.shm) : -1]);
+    o.e = this.enemies.filter(e => e.type !== 10 || !M || !M.bx || d2(e, s) < 3000 * 3000).map(e => [e.id, e.type, round(e.x), round(e.y), r2(e.a), ETYPES[e.type].mp ? 1 : (e.type === 10 ? round(e.r) : r2(max(0, e.hp / e.mhp))), e.warp > 0 ? 1 : 0, e.paint > 0 ? 1 : 0, e.ports ? e.ports.map(p => [r2(p.hp / p.mhp), r2(p.pa), p.ch > 0 ? 1 : 0]) : 0, e.shm ? r2(e.sh / e.shm) : -1]);
     o.eb = this.eb.map(b => [b.id, round(b.x), round(b.y), r2(atan2(b.vy, b.vx)), b.t, b.hv ? 1 : 0, round(hypot(b.vx, b.vy)), b.home ? 1 : 0]);
     o.pp = this.pp.map(p => [p.id, round(p.x), round(p.y), r2(atan2(p.vy, p.vx)), p.k === 'rk' ? 0 : 1]);
-    o.al = this.allies.map(a => [a.id, a.k, round(a.x), round(a.y), r2(a.a), r2(max(0, a.hp / a.mhp)), r2(a.resc || 0)]);
+    o.al = this.allies.map(a => [a.id, a.k, round(a.x), round(a.y), r2(a.a), r2(max(0, a.hp / a.mhp)), r2(a.resc || 0), r2(a.ta || 0), a.gi > 0 ? 1 : 0]);
     o.pk = this.picks.map(p => [p.id, round(p.x), round(p.y), p.k === 'core' ? 1 : 0]);
     o.mn = this.mines.map(m => [round(m.x), round(m.y)]);
     o.bo = this.bombs.map(b => [round(b.x), round(b.y)]);
@@ -943,7 +1013,7 @@ class Room {
     o.crew = this.seats.map(st => [st.human ? st.human.prof.name : st.botName, st.human ? 0 : 1, st.human ? st.human.pid : 0, st.cur.as && !s.sec[st.idx].dn ? 1 : 0, st.human && st.human.inp.idle ? 1 : 0,
       [0, 1, 2].map(k => { const A = this.abilityOf(st.idx, k); if (!A) return 0; const ab = A[0]; return [ab, r1(max(0, st.cd[ab] || 0)), r1(st.cdm[ab] || ABIL[ab].cd * A[1])]; }), Object.keys(st.bf).filter(k => st.bf[k] > 0),
       this.ports[st.idx].map((p, sl) => p && sl < this.mk ? [p.id, p.lv] : 0)]);
-    if (M) o.mi = { name: M.name, type: M.type, lv: M.level, diff: M.diff, kind: M.kind, planet: M.planet, wave: M.wave, waves: M.waves, got: M.got, need: M.need, lost: M.lost, pods: M.pods, jx: M.jx, jy: M.jy, left: this.hostiles(), fac: M.fac, mod: M.mod };
+    if (M) o.mi = { name: M.name, type: M.type, lv: M.level, diff: M.diff, kind: M.kind, planet: M.planet, wave: M.wave, waves: M.waves, got: M.got, need: M.need, lost: M.lost, pods: M.pods, jx: M.jx, jy: M.jy, left: this.hostiles(), fac: M.fac, mod: M.mod, bx: M.bx, by: M.by, sx: M.sx, px: M.px, pax: M.pax };
     if (this.phase === 'map') { const hum = this.humans(), w = {}; for (const c of this.clients) { const v = this.votes.get(c.pid); if (!v) continue; const seat = this.seatOf(c); w[v] = (w[v] || 0) + (seat && seat.idx === PILOT ? max(1, hum - 1) : 1); } o.opts = this.options; o.votes = w; o.pw = max(1, hum - 1); o.my = {}; }
     if (this.phase === 'result' || this.phase === 'upgrade') o.res = this.result;
     if (this.phase === 'upgrade') o.rdy = [...this.ready];
@@ -969,7 +1039,7 @@ function getRoom(code) {
   for (const r of rooms.values()) if (r.pub && r.humans() < 6) return r;
   const r = new Room(rooms.has('PUBLIC') ? newCode() : 'PUBLIC', true); rooms.set(r.code, r); return r;
 }
-const ACTS = new Set(['q', 'e', 'r', 'p1', 'p2', 'p3', 'p4', 'dr']);
+const ACTS = new Set(['q', 'e', 'r', 'u1', 'u2', 'u3', 'u4', 'd1', 'd2', 'd3', 'd4', 'z', 'dr']);
 function onMessage(c, m) {
   if (m.t === 'join' && !c.room) {
     const name = String(m.name || '').replace(/[^\w \-\.!?]/g, '').trim().slice(0, 14) || ('Cadet' + (100 + floor(random() * 900)));
@@ -1012,6 +1082,8 @@ function devOp(R, c, m) {
   else if (m.op === 'ship') { Object.assign(s, m.v || {}); }
   else if (m.op === 'path') { const P = c.prof.t[m.tree]; P.path = (m.path || []).slice(0, 5); c.dirty = 1; R.calcStats(); }
   else if (m.op === 'hurt') { for (const k of m.k || []) { s.sec[k].dn = 1; s.sec[k].hp = 0; R.ev('sd', k); } }
+  else if (m.op === 'drop') { for (let i = 0; i < (m.n | 0 || 6); i++) { const an = (+m.a || 0) + i * 0.9, dd = (+m.d || 260) + (i % 3) * 40; R.dropCredits(s.x + cos(an) * dd, s.y + sin(an) * dd, 5); const pk = R.picks[R.picks.length - 1]; pk.vx = pk.vy = 0; pk.life = m.life || 40; } }
+  else if (m.op === 'mapopt') { if (R.options[m.i | 0]) R.options[m.i | 0].type = m.type; }
   else if (m.op === 'shp') { s.shp = +m.v; s.shDown = 0; }
 }
 rooms.set('PUBLIC', new Room('PUBLIC', true));
@@ -1048,7 +1120,7 @@ function start() {
     for (const [code, r] of rooms) if (code !== 'PUBLIC' && !r.clients.size && Date.now() - r.emptySince > (r.pub ? 60e3 : 15 * 60e3)) rooms.delete(code);
   }, 1000 / 60);
   if (process.env.WATCH) fs.watch(PUB, () => { try { loadFiles(); } catch (e) { } });
-  server.listen(PORT, () => console.log('Team Space Ship v4 on :' + PORT));
+  server.listen(PORT, () => console.log('Team Space Ship v5 on :' + PORT));
 }
 if (require.main === module) start();
 module.exports = { Room, buy, botSpend, rooms };

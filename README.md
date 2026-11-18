@@ -22,6 +22,17 @@ npm test           # websocket integration test against localhost:8080
 - `test/ws-test.js`: integration test (`npm test`; run the server with `DEV_TOOLS=1` to also exercise purchases, ports, Mk upgrades and spawned enemies)
 - `test/shot-v3.js`: staged headless screenshots (ship tiers, shield arc, pyramid, docks, planets); `test/shot-flow.js`: play-through screenshots incl. mobile (need Chrome + puppeteer-core)
 
+## What is new in v5 (update number 4)
+- **Engineer power rerouting**: a big panel with 4 options (Engines, Weapons, Shields, Repair), 10 levels each but only **10 slots in total**. Keys 1-4 add a slot, Shift+1-4 remove one, C clears. Each slot gives +1.5% top speed and +8% throttle response / +5% gun fire rate / +10% shield recharge speed / +3% repair speed. Ship energy (start 100) is used only for rerouting: the generator (2.0/s) covers exactly 1 slot, 2 slots drain 0.16/s net, 10 slots drain 8.0/s (generator cap is 6.0/s). Generator upgrades only lengthen how long high levels last. At 0 energy: 20 s lockout, engine thrust capped at 25%, rerouting offline, then energy is full again.
+- **Proton Bomb** is the Engineer's innate Q ability from the start: 12 s own cooldown, never uses energy; upgrades add fuses, twin bombs, radius, damage.
+- **Repair drone** is a little starship that flies itself: short-range teal laser beam, picks up credits and items, 5 HP (was 3). The Repair player can still recall/launch it (G); recalled = +50% repair speed.
+- **Repair port switching fixed**: clicking another port or the hull switches immediately, even mid-repair or mid-minigame (rows are no longer rebuilt under the cursor, no pointer capture, no toggle-off).
+- **Credit chips** are much brighter. **Money x1.1** on every payout.
+- **Defend missions**: the station has 170+40/level HP (was 90+22) and 4 guns.
+- **Enemies only spawn from docks or the map edges** (and run in from the edge); never mid-field.
+- **New mission: Passenger Run**: an 8000x1280 corridor full of asteroids with a few enemy ships; fly to the far end, pick up the passengers, bring them back to the start. On the star map and in the main campaign sequence.
+- Tests: `test/v5-test.js` (needs `DEV_TOOLS=1`), `test/shot-v5.js` (screenshots).
+
 ## What is new in v4 (update number 3)
 - **Repair rework**: the Repair player gets a big side panel with the health of the ship and every port. Click a damaged port to start it: it then repairs **automatically**; each station/port type has its own **minigame** (cockpit signal trace, turret bolt sequence, engine fuel pressure, deflector frequency lock, hull seam weld, extra-port wire patch) worth up to +100% speed. **Disabling the drone (G or the panel button) repairs 50% faster**, the panel says so. The drone is out by default, also while the ship is damaged.
 - **The Repair Bay is repaired by everyone else**: the Repair player can not fix it, and while it is destroyed they can neither repair ports nor use the drone. All other players see a red alert and a big **CLICK RAPIDLY** button (Space works too). One clicker is slow; the whole crew clicking is normal speed. Players with a destroyed station can still help, and bots in empty seats help slowly. The alert vanishes when it is fixed and comes back if it is destroyed again.
@@ -41,9 +52,9 @@ npm test           # websocket integration test against localhost:8080
 Common: Q/E/R abilities (picked in the skill pyramid, U), Tab switch role, H help, M mute, N music. Station destroyed? The Repair player clicks it to repair it. Repair Bay destroyed? Everybody else mashes CLICK RAPIDLY.
 - Pilot: aim to steer, click nose laser. Q Barrel Roll (built in), E/R from the pyramid (Lock-On Volley, Battle Cry, Flare Burst, Strafing Run, Rally Point)
 - Gunners: aim + click, each gunner fires their own turret and port turrets. Q Rapid Fire, then Flak Screen, Overcharge, Target Paint, Barrage, Deadeye, Suppressive Fire
-- Engineer: W/S throttle (only the engineer controls speed), 1/2/3 power pips, 4 reset. Q Reroute Power, then Afterburner, Proton Bomb, Micro-Jump, Seismic Charge, Power Surge
+- Engineer: W/S throttle (only the engineer controls speed), 1-4 add a rerouting slot (Shift removes, C clears). Q Proton Bomb, then Afterburner, Micro-Jump, Seismic Charge, Power Surge
 - Shields: aim the arc (it stays where you point it). Q Fortify, then Barrier Bubble, Shield Lance, Energy Vent, Aegis Link, Nova Lance, Emergency Reboot
-- Repair: click a damaged port in the side panel (or 1-6 / 0 = hull) to start the automatic repair, play its minigame for a bonus, G toggles the drone (off = +50% repair). Q Spot Weld, then Nano Swarm, Drone Overdrive, Stim Shot, Restoration, Drone Swarm, Field Medic
+- Repair: click a damaged port in the side panel (or 1-6 / 0 = hull) to start the automatic repair, play its minigame for a bonus, G recalls/launches the self-flying drone (recalled = +50% repair). Q Spot Weld, then Nano Swarm, Drone Overdrive, Stim Shot, Restoration, Drone Swarm, Field Medic
 
 ## Deploy (Render, free web service)
 Build `npm install`, start `npm start`, health check `/health`. Player profiles are saved to `data/` (ephemeral on Render free).

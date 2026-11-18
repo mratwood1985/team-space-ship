@@ -17,7 +17,7 @@ function client(room, name, role) {
 const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() < d) { if (fn()) return true; await sleep(100); } return false; };
 (async () => {
   let ok = true; const check = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!cond) ok = false; };
-  check(D.VERSION === 4 && D.ARENA === 4200 && D.EFIRE_WEAK_LV === 5 && D.EFIRE_WEAK < 1, 'defs: v4, arena 4200, enemy fire reduced on levels 1-5');
+  check(D.VERSION >= 4 && D.ARENA === 4200 && D.EFIRE_WEAK_LV === 5 && D.EFIRE_WEAK < 1, 'defs: v4+, arena 4200, enemy fire reduced on levels 1-5');
   const code = 'V4' + (Date.now() % 10000);
   const R = await client(code, 'Rep', 2), P = await client(code, 'Pil', 0);
   R.send({ t: 'dev', op: 'mission', i: 0, over: { type: 'escort', level: 3 } });
