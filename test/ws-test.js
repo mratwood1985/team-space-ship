@@ -18,7 +18,7 @@ function client(room, name, role) {
 async function until(fn, ms) { const d = Date.now() + ms; while (Date.now() < d) { if (fn()) return true; await sleep(200); } return false; }
 (async () => {
   let ok = true; const check = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!cond) ok = false; };
-  const h0 = await (await fetch(BASE + '/health')).json(); console.log('health', h0); check(h0.v === D.VERSION && D.VERSION === 5, 'health reports v5');
+  const h0 = await (await fetch(BASE + '/health')).json(); console.log('health', h0); check(h0.v === D.VERSION && D.VERSION === 6, 'health reports v5');
   const t0 = Date.now(); const a = await client('', 'Alice', 0); check(a.me.role === 0 && a.me.pub, `public join as Pilot in ${Date.now() - t0}ms (room ${a.me.code})`);
   await sleep(2500);
   check(a.snaps > 25, `snapshots streaming: ${a.snaps} in 2.5s`);
@@ -91,7 +91,7 @@ async function until(fn, ms) { const d = Date.now() + ms; while (Date.now() < d)
     b.send({ t: 'buy', tree: 'pilot', kind: 'port', id: 'twin', slot: 0 }); await sleep(400);
     check(b.last.crew[0][7][0] && b.last.crew[0][7][0][0] === 'twin' && b.last.sh.sc[6] >= 0, 'Wing Cannon installed: pilot gets a physical extra section (sc[6]=' + b.last.sh.sc[6] + ')');
     b.send({ t: 'buy', tree: 'pilot', kind: 'port', id: 'rockets', slot: 0 }); await sleep(300); check(b.last.crew[0][7][0][0] === 'twin', 'port choice is permanent');
-    b.send({ t: 'buy', tree: 'pilot', kind: 'pup', slot: 0 }); await sleep(300); check(b.last.crew[0][7][0][1] === 1, 'each port is upgraded separately (lv ' + b.last.crew[0][7][0][1] + ')');
+    b.send({ t: 'buy', tree: 'pilot', kind: 'pup', slot: 0, opt: 'dmg' }); await sleep(300); check(b.last.crew[0][7][0][1] === 1, 'each port is upgraded separately (lv ' + b.last.crew[0][7][0][1] + ')');
     const g0 = b.me.cr; b.send({ t: 'mk' }); await sleep(400); check(b.last.mk === 2, 'Mk III bought'); b.send({ t: 'core' }); await sleep(400);
     check(b.me.cr === g0 + Math.round(D.CORE_RATE * D.MONEY_MULT), `core -> credits conversion after Mk III: +${b.me.cr - g0} (rate ${D.CORE_RATE} x ${D.MONEY_MULT} money bonus)`);
     b.send({ t: 'dev', op: 'hurt', k: [6] }); await sleep(300);
@@ -107,7 +107,7 @@ async function until(fn, ms) { const d = Date.now() + ms; while (Date.now() < d)
   check((a.evs.b || 0) > 20, `lasers fired (public): ${a.evs.b}`); check((a.evs.boom || 0) >= 2, `explosions: ${a.evs.boom}`);
   console.log('private event counts:', JSON.stringify(b.evs));
   d.ws.close(); await sleep(800); check(c.last.crew[4][1] === 1, 'Dan left -> bot took the Shield seat');
-  const h = await (await fetch(BASE + '/health')).json(); console.log('health', h); check(h.v === 5, 'health reports v5');
+  const h = await (await fetch(BASE + '/health')).json(); console.log('health', h); check(h.v === 6, 'health reports v5');
   a.ws.close(); b.ws.close(); c.ws.close();
   console.log(ok ? 'ALL TESTS PASSED' : 'SOME TESTS FAILED'); process.exit(ok ? 0 : 1);
 })().catch(e => { console.error(e); process.exit(1); });

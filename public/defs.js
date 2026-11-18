@@ -1,14 +1,14 @@
-// Team Space Ship v5: shared game data for the server (require) and the client (window.DEFS)
+// Team Space Ship v6: shared game data for the server (require) and the client (window.DEFS)
 (function (root) {
 const PI = Math.PI;
-const VERSION = 5;
+const VERSION = 6;
 const ARENA = 4200;                       // half-size of the mission map (v4: was 3200)
 const EFIRE_WEAK_LV = 5, EFIRE_WEAK = 0.6; // enemy fire does 60% damage on mission levels 1-5, full from level 6
 const REPAIR_CFG = { base: 20, drone: 1.5, mgMax: 1.0, clickDiv: 300, botCps: 1.5 }; // repair: base seconds per section, drone-off speed multiplier, minigame max bonus, click strength on the Repair Bay
 const MONEY_MULT = 1.1;                   // v5: about 10% more credits for everyone
 // v5 power rerouting (Engineer): 10 slots in total over 4 options. Drain per second = base * DRAIN[slots used]; the generator regenerates `base` per second at the start (= exactly 1 slot).
-const RR_CFG = { max: 10, base: 2.0, drain: [0, 1, 1.08, 1.2, 1.38, 1.6, 1.9, 2.3, 2.8, 3.4, 4.0], regenCap: 3.0, lock: 20, lockThr: 0.25,
-  eng: 0.015, acc: 0.08, wpn: 0.05, shd: 0.10, rep: 0.03 };    // per slot: top speed, throttle response, gun fire rate, shield recharge speed, repair speed
+const RR_CFG = { max: 10, base: 2.0, drain: [0, 1, 1.14, 1.35, 1.65, 2.05, 2.6, 3.3, 4.2, 5.4, 7.0], regenCap: 3.0, lock: 20, lockThr: 0.25,
+  eng: 0.015, acc: 0.08, wpn: 0.05, shd: 0.10, rep: 0.03, shHp: 0.10, shDr: 0.035 };   // v6: steeper drain curve (10 slots = 14/s). shd = recharge speed per slot; shHp = +max shield HP per slot; shDr = shield damage reduction per slot    // per slot: top speed, throttle response, gun fire rate, shield recharge speed, repair speed
 const RR_NAMES = ['ENGINES', 'WEAPONS', 'SHIELDS', 'REPAIR'];
 const BOMB_CFG = { cd: 12, rad: 150, dmg: 10 };
 const ROLES = ['pilot', 'gunR', 'repair', 'engineer', 'shield', 'gunL'];
@@ -21,8 +21,8 @@ const TREE_OF = ['pilot', 'gun', 'repair', 'engineer', 'shield', 'gun'];
 const NODE_COST = [60, 120, 220, 360, 560];          // pyramid row 1..5
 const infCost = lv => 25 + 12 * lv;                   // limitless small upgrades
 const PORT_COST = [250, 400];                         // install a port in slot 1 (Mk II) / slot 2 (Mk III)
-const portUpCost = lv => 60 + 40 * lv;                // per-port upgrades
-const PORT_MAX_LV = 10;
+const portUpCost = lv => 60 + 40 * lv;                // per-port upgrades: lv = total upgrade levels already bought on that port
+const PORT_MAX_LV = 5;                                // v6: max level of EACH port upgrade option
 const MK_COST = [0, 10, 22];                          // crew cores
 const MK_NAMES = ['Mk I Corvette', 'Mk II Gunship', 'Mk III Battlecruiser'];
 const CORE_RATE = 15;                                 // after Mk III: 1 core -> 15 credits for every crew member
@@ -122,7 +122,7 @@ const TREES = {
     [N('g_master', 'Gun Master', { dmg: 0.35, rof: 0.25, crit: 0.1 }), N('g_fort', 'Fortress Turret', { pd: 20, range: 0.3, pierce: 1, sBreak: 0.5 })]],
     inf: [['i_dmg', 'Coil Tuning', 'dmg', 0.03], ['i_rof', 'Cycler', 'rof', 0.02], ['i_rng', 'Barrel Lapping', 'range', 0.02]],
     big: [['b_armor', 'Armored Turret', 'Your turret section +1 HP', 450, 0, {}], ['b_twin', 'Twin-Linked Barrels', 'Every turret shot fires 2 bolts', 750, 1, {}]],
-    ports: [['rockets', 'Rocket Turret', 'Slow homing red-glow rockets with splash, fire with your guns'], ['beam', 'Beam Turret', 'Continuous red beam: short range, ignores shot speed'], ['scatter', 'Scatter Turret', '5-bolt red spread, shorter range']] },
+    ports: [['rockets', 'Rocket Turret', 'Slow homing red-glow rockets with splash, fire with your guns'], ['beam', 'Beam Turret', 'Continuous red beam: short range, ignores shot speed'], ['scatter', 'Scatter Turret', '5-bolt red spread, shorter range'], ['sniper', 'Sniper Turret', 'Slow, very fast, bright high-damage rail shot that pierces armor'], ['laser', 'Laser Cannon', 'Just another laser cannon, identical to your starting one']] },
   engineer: { name: 'Engineering', rows: [
     [N('e_limp', 'Limp Mode', { limp: 0.35 }), N('e_turbine', 'Tuned Turbines', { speed: 0.12 }), N('e_reactor', 'Reactor Tuning', { regen: 0.3 }), N('e_conduit', 'Power Conduits', { pipEff: 0.3 }), N('e_caps', 'Capacitor Banks', { emax: 30 }), N('e_demo', 'Demolitions', { bombDmg: 0.3 })],
     [N('e_burn', 'Afterburner', {}, 'burner'), N('e_ram', 'Ram Plating', { ram: 1 }), N('e_bomb', 'Bomb Fuses', { bombCd: 0.2, bombRad: 0.15 }), N('e_relay', 'Quick Relays', { cdr: 0.15 }), N('e_ovl', 'Overload Relay', { pipEff: 0.25 })],
@@ -180,7 +180,7 @@ function treeStats(treeKey, P) {
 const ABS = {
   hull: { b: mk => 40 + 12 * mk, u: '', d: 0 }, emax: { b: () => 100, u: '', d: 0 }, shHp: { b: () => 4, u: ' HP', d: 1 }, shArc: { b: () => SHIELD_ARC0, u: '°', d: 0, max: SHIELD_ARC_MAX },
   pd: { b: () => 12, u: ' px', d: 0 }, arcG: { b: () => 110, u: '°', d: 0 }, pierce: { b: () => 0, u: '', d: 0 }, nPierce: { b: () => 0, u: '', d: 0 }, rollInv: { b: () => 0.7, u: ' s', d: 1 },
-  burn: { b: () => 2.5, u: ' s', d: 1 }, drones: { b: () => 1, u: '', d: 0 }, dHp: { b: () => 3, u: ' HP', d: 0 }, portHp: { b: () => 3, u: ' HP', d: 1 }, buff: { b: () => 5, u: ' s', d: 0 },
+  burn: { b: () => 2.5, u: ' s', d: 1 }, drones: { b: () => 1, u: '', d: 0 }, dHp: { b: () => 5, u: ' HP', d: 0 }, portHp: { b: () => 3, u: ' HP', d: 1 }, buff: { b: () => 5, u: ' s', d: 0 },
 };
 // multiplicative stats with a known base: [base, unit]
 const ABSX = { nDmg: [1.6, ' dmg'], dmg: [1.6, ' dmg'], nRate: [2.6, ' shots/s'], rof: [2.8, ' shots/s'], speed: [185, ' top speed'], nRange: [600, ' px'], bombDmg: [10, ' dmg'], bombRad: [150, ' px radius'], regen: [1, 'x output'], turn: [1.7, ' rad/s'] };
@@ -202,7 +202,32 @@ function statLine(k, cur, add, mk) {
 function fxLines(treeKey, P, fx, mk) { const cur = treeStats(treeKey, P); return Object.keys(fx).map(k => statLine(k, cur[k] || 0, fx[k], mk)); }
 function infCap(treeKey, id, lv) { return treeKey === 'shield' && id === 'i_arc' ? lv >= (SHIELD_ARC_MAX - SHIELD_ARC0) / 5 : false; }
 
-const BOT_PORTS = [['twin', 'rockets'], ['rockets', 'beam'], ['drone2', 'sdrone'], ['aux', 'mines'], ['capbank', 'rear'], ['scatter', 'rockets']];
+// ---------- v6 port upgrades: every port type has its own upgrade options (each up to PORT_MAX_LV levels) that change what that port does; Section HP is always one of them ----------
+// t: pct = +x%, n = +x, cd = -x%, p = +x percentage points
+const PU = (o, n, d, per, t, max) => ({ o, n, d, per, t: t || 'pct', max: max || 5 });
+const PU_HP = PU('hp', 'Section HP', 'Tougher port section: +0.8 HP per level', 0.8, 'n');
+const PORT_UPS = {
+  'pilot.twin': [PU('dmg', 'Heavy Slugs', 'Wing cannon bolts hit harder', 0.18), PU('pierce', 'Piercing Rounds', 'Bolts punch through enemies', 1, 'n', 3), PU('barrels', 'Extra Barrel', 'Fires more bolts per shot', 1, 'n', 2), PU_HP],
+  'pilot.rockets': [PU('dmg', 'Warheads', 'Rocket damage', 0.2), PU('loader', 'Quick Loader', 'Fewer nose shots between rockets', 1, 'n', 2), PU('seeker', 'Seeker Heads', 'Rockets curve toward enemies', 1, 'n', 3), PU_HP],
+  'pilot.scatter': [PU('dmg', 'Hot Pellets', 'Scatter damage', 0.15), PU('fan', 'Wide Fan', 'Two more pellets per blast', 2, 'n', 2), PU('cycle', 'Quick Cycle', 'Shorter pause between blasts', 0.12, 'cd', 4), PU_HP],
+  'gun.rockets': [PU('dmg', 'Warheads', 'Rocket damage', 0.2), PU('reload', 'Fast Reload', 'Shorter pause between rockets', 0.12, 'cd', 4), PU('blast', 'Big Blast', 'Larger splash radius', 0.2), PU_HP],
+  'gun.beam': [PU('dmg', 'Hot Lens', 'Beam damage per second', 0.2), PU('range', 'Long Focus', 'Beam reaches farther', 0.15), PU('cutter', 'Shield Cutter', 'Extra damage to enemy shields', 0.3), PU_HP],
+  'gun.scatter': [PU('dmg', 'Hot Pellets', 'Scatter damage', 0.15), PU('fan', 'Wide Fan', 'Two more pellets per blast', 2, 'n', 2), PU('cycle', 'Quick Cycle', 'Shorter pause between blasts', 0.12, 'cd', 4), PU_HP],
+  'gun.sniper': [PU('dmg', 'Hollow-Point', 'Sniper shot damage', 0.25), PU('reload', 'Fast Bolt Action', 'Shorter pause between shots', 0.08, 'cd'), PU('pierce', 'Rail Piercing', 'The shot passes through more enemies', 1, 'n', 3), PU('crit', 'Deadeye Optics', 'Chance for a double-damage shot', 0.1, 'p'), PU_HP],
+  'gun.laser': [PU('dmg', 'Power Cells', 'Laser cannon damage', 0.15), PU('rof', 'Overclock', 'Laser cannon fire rate', 0.12), PU('twin', 'Twin Link', 'Fires a second parallel bolt', 1, 'n', 1), PU('range', 'Long Barrel', 'Bolts fly farther', 0.15), PU_HP],
+  'engineer.mines': [PU('dmg', 'Heavy Charge', 'Mine damage', 0.25), PU('rate', 'Rapid Layer', 'Mines are dropped more often', 0.1, 'cd'), PU('life', 'Long Fuse', 'Mines stay armed longer', 0.3), PU_HP],
+  'engineer.tractor': [PU('range', 'Wide Beam', 'Pull range for credits and cores', 0.3), PU('salvage', 'Salvage Rights', 'More credits from every pickup', 0.06), PU_HP],
+  'engineer.aux': [PU('regen', 'Reactor Boost', 'Power generator output', 0.12), PU('cap', 'Capacitors', 'Bigger energy store', 10, 'n'), PU('eff', 'Efficient Routing', 'Every rerouting slot drains less', 0.04, 'cd'), PU_HP],
+  'shield.rear': [PU('width', 'Wide Rear Arc', 'The rear arc covers more angle', 0.12), PU('guard', 'Rear Plating', 'More shield HP', 0.8, 'n'), PU_HP],
+  'shield.reflect': [PU('chance', 'Mirror Grid', 'More blocked lasers bounce back', 0.08, 'p'), PU('rdmg', 'Hot Reflect', 'Reflected bolts hit harder', 0.3), PU_HP],
+  'shield.capbank': [PU('cap', 'Bigger Bank', 'More shield HP', 0.8, 'n'), PU('regen', 'Trickle Charger', 'Shield HP/s regeneration', 0.1, 'n'), PU('reset', 'Quick Reset', 'Shield comes back sooner after going down', 0.06, 'cd'), PU_HP],
+  'repair.drone2': [PU('dmg', 'Pulse Cells', 'All drones hit harder', 0.15), PU('plating', 'Armor Plating', 'More drone armor', 1, 'n'), PU('thrust', 'Thrusters', 'Faster drones', 0.08), PU_HP],
+  'repair.sdrone': [PU('armor', 'Bulwark', 'The shield drone takes more hits', 1, 'n'), PU('respawn', 'Fast Respawn', 'It returns sooner after being shot down', 0.12, 'cd'), PU_HP],
+  'repair.welder': [PU('hull', 'Hull Weld', 'Hull regeneration', 0.3), PU('mend', 'Nanite Mist', 'Every damaged section slowly heals itself', 0.02, 'n'), PU_HP],
+};
+function puVal(def, lv) { const v = def.per * lv; if (def.t === 'pct' || def.t === 'p') return '+' + Math.round(v * 100) + '%'; if (def.t === 'cd') return '-' + Math.round(v * 100) + '%'; return '+' + (+v.toFixed(2)); }
+
+const BOT_PORTS = [['twin', 'rockets'], ['sniper', 'beam'], ['drone2', 'sdrone'], ['aux', 'mines'], ['capbank', 'rear'], ['laser', 'scatter']];
 const BOT_PATH = { pilot: [3, 2, 2, 1, 1], gun: [1, 1, 1, 1, 0], engineer: [2, 2, 1, 1, 0], shield: [1, 1, 1, 1, 0], repair: [0, 0, 0, 0, 0] };
 const DIFFS = [{ n: 'EASY', lv: -1, m: 0.8 }, { n: 'NORMAL', lv: 0, m: 1 }, { n: 'HARD', lv: 2, m: 1.45 }, { n: 'ELITE', lv: 4, m: 2 }];
 const MTYPES = {
@@ -212,6 +237,9 @@ const MTYPES = {
   station: { n: 'Destroy the Enemy Station', d: 'Break its shield, knock out every battery and hangar, then clear the area' },
   defend: { n: 'Defend the Station', d: 'Hold off the waves attacking the friendly station' },
   passengers: { n: 'Passenger Run', d: 'Thread the long asteroid field to the far end, pick up the passengers and bring them back to the start' },
+  survival: { n: 'Last Stand', d: 'Level 10+: hold out against endless, growing waves until the timer runs out', adv: 1 },
+  bombrun: { n: 'Kamikaze Swarm', d: 'Level 10+: bomb ships pour in from every edge. Shoot them down before they ram you', adv: 1 },
+  siege: { n: 'Twin Fortress Siege', d: 'Level 10+: two enemy battle stations. Break both shields, silence every battery and hangar', adv: 1 },
   flagship: { n: 'Flagship Assault', d: 'Fight through the escorts, then destroy every port on the flagship' },
 };
 // enemy weapons. ALL enemy fire glows neon green. t: 0 laser, 1 missile, 2 flak. sd = damage to the player shield
@@ -253,12 +281,13 @@ const ETYPES = [
   { id: 'dreadnought', n: 'Dreadnought', sz: 3, r: 200, hp: 1, sh: 90, spd: 22, want: 700, minL: 14, cr: 45, mp: 1, php: 44, hull: { k: 'tri', p: [[200, 0], [-150, -110], [-150, 110]] },
     ports: [P_(190, 0, 0, 0.35, 720, 'ion', 'Spinal Ion Lance'), P_(80, -36, -PI / 2 + 0.35, 1.1, 680, 'las', 'Port Fore Battery'), P_(80, 36, PI / 2 - 0.35, 1.1, 680, 'las', 'Starboard Fore Battery'), P_(0, -60, -PI / 2 + 0.35, 1.2, 700, 'msl', 'Port Missile Bank'), P_(0, 60, PI / 2 - 0.35, 1.2, 700, 'msl', 'Starboard Missile Bank'),
       P_(-90, -84, -PI / 2 - 0.4, 1.0, 560, 'flak', 'Port Flak Tower'), P_(-90, 84, PI / 2 + 0.4, 1.0, 560, 'flak', 'Starboard Flak Tower'), P_(-146, -50, PI, 0.9, 650, 'las', 'Port Stern Gun'), P_(-146, 50, PI, 0.9, 650, 'las', 'Starboard Stern Gun'), P_(-40, -72, -PI / 2, 0, 0, 'dock', 'Port Hangar', 4), P_(-40, 72, PI / 2, 0, 0, 'dock', 'Starboard Hangar', 4)] },
+  { id: 'kamikaze', n: 'Kamikaze Bomb Ship', sz: 0, r: 17, hp: 11, spd: 150, want: 0, minL: 6, cr: 3 },
 ];
 const PLANET_A = ['Kor', 'Vel', 'Tha', 'Ix', 'Mor', 'Zan', 'Dra', 'Cyr', 'Ul', 'Esk', 'Bes', 'Nar', 'Ord', 'Yav', 'Kes', 'Tal', 'Ryl', 'Sul', 'Ost', 'Mav'];
 const PLANET_B = ['a', 'o', 'u', 'e', 'i', 'ae', 'ou', 'y'];
 const PLANET_C = ['lis', 'thar', 'nox', 'ria', 'dor', 'vex', ' Prime', 'mir', 'ten', 'gar', 'phos', ' IV', ' VII', 'lune', 'kesh', 'tura', 'zan'];
 const PLANET_K = ['rocky', 'ice', 'lava', 'ocean', 'gas', 'desert', 'toxic', 'jungle', 'storm', 'moon', 'ringed', 'city'];
-const out = { VERSION, MONEY_MULT, RR_CFG, RR_NAMES, BOMB_CFG, ARENA, EFIRE_WEAK_LV, EFIRE_WEAK, REPAIR_CFG, ABS, ABSX, statLine, fxLines, ROLES, RNAME, RSHORT, PORT_NAMES, TREE_OF, NODE_COST, infCost, PORT_COST, portUpCost, PORT_MAX_LV, MK_COST, MK_NAMES, CORE_RATE, SHIELD_ARC0, SHIELD_ARC_MAX, SHIELD_DOWN,
+const out = { PORT_UPS, PU_HP, puVal, VERSION, MONEY_MULT, RR_CFG, RR_NAMES, BOMB_CFG, ARENA, EFIRE_WEAK_LV, EFIRE_WEAK, REPAIR_CFG, ABS, ABSX, statLine, fxLines, ROLES, RNAME, RSHORT, PORT_NAMES, TREE_OF, NODE_COST, infCost, PORT_COST, portUpCost, PORT_MAX_LV, MK_COST, MK_NAMES, CORE_RATE, SHIELD_ARC0, SHIELD_ARC_MAX, SHIELD_DOWN,
   GEO, secIdx, FX, fxText, ABIL, INNATE, TREES, pyrAllowed, treeStats, infCap, BOT_PORTS, BOT_PATH, DIFFS, MTYPES, WEAP, ETYPES, PLANET_A, PLANET_B, PLANET_C, PLANET_K };
 if (typeof module !== 'undefined' && module.exports) module.exports = out; else root.DEFS = out;
 })(this);

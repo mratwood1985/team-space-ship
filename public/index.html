@@ -63,7 +63,7 @@ input{font:inherit;background:#020610;color:#fff;border:1px solid #5ad;border-ra
 body.touch #repp{top:120px;right:4px;transform:scale(.8);transform-origin:top right}body.touch #rapid{top:120px;right:4px;width:230px}body.touch #rapb{height:120px;font-size:24px}
 .fxs{display:block;margin-top:3px}.fxl{display:block;font-size:11px;color:#cfe;line-height:1.3}.fxl u{text-decoration:none;color:#ffd54a}.fxe{display:block;font-size:10px;color:#8ab}
 
-#engp{right:8px;bottom:auto;top:196px;width:min(400px,94vw);max-height:calc(100vh - 206px);overflow-y:auto;padding:10px;border:1px solid #5ad;border-radius:10px;background:linear-gradient(180deg,rgba(10,18,34,.94),rgba(4,9,20,.94));box-shadow:0 0 18px #27f3}
+#engp{right:8px;bottom:12px;top:auto;width:min(400px,94vw);max-height:calc(100vh - 230px);overflow-y:auto;padding:10px;border:1px solid #5ad;border-radius:10px;background:linear-gradient(180deg,rgba(10,18,34,.94),rgba(4,9,20,.94));box-shadow:0 0 18px #27f3}
 #engp h3{font-size:14px;color:#ffd54a;margin-bottom:6px;letter-spacing:.06em}#rrused{float:right;font-size:14px;color:#cde}
 .rrbar{position:relative;height:26px;border:1px solid #8ac;border-radius:5px;background:#050b14;overflow:hidden;box-shadow:inset 0 2px 4px #000}.rrbar i{display:block;height:100%;transition:width .15s}
 .rrbar span{position:absolute;left:0;right:0;top:0;line-height:26px;text-align:center;font-size:14px;font-weight:bold;text-shadow:0 0 4px #000}.rrnet{font-size:12px;margin:4px 0 6px;color:#cde}
@@ -72,7 +72,7 @@ body.touch #repp{top:120px;right:4px;transform:scale(.8);transform-origin:top ri
 .rrr{margin:5px 0;padding:5px 6px;border:1px solid #234;border-radius:7px;background:#08111e}.rrh{display:flex;align-items:center;gap:6px;font-size:12px;margin-bottom:4px}.rrh b{min-width:112px}.rrd{flex:1;font-size:10px;color:#9ab;line-height:1.2}
 .rrh button{width:28px;padding:2px 0;font-size:15px;font-weight:bold}.rrs{display:grid;grid-template-columns:repeat(10,1fr);gap:3px}.rrs i{display:block;height:22px;border:1px solid #456;border-radius:3px;background:#050b14;cursor:pointer}.rrs i:hover{border-color:#fff}
 #rrrows.off{opacity:.45;pointer-events:none}.rrf{display:flex;gap:8px;align-items:center;margin:4px 0}.rrf button{flex:0 0 auto;font-size:11px;padding:3px 8px}
-body.touch #engp{top:120px;right:4px;transform:scale(.8);transform-origin:top right}
+body.touch #engp{top:auto;bottom:70px;right:4px;transform:scale(.8);transform-origin:bottom right}
 #card{left:50%;top:64px;transform:translateX(-50%);width:min(94vw,600px);padding:12px 16px;border:1px solid #ffd54a;border-radius:10px;background:rgba(12,10,2,.88);font-size:13px;line-height:1.5}
 #card h2{font-size:17px;color:#ffd54a;margin-bottom:4px}#card .x{float:right;font-size:11px;color:#aa8}
 .panel{left:50%;top:50%;transform:translate(-50%,-50%);width:min(98vw,1180px);max-height:92vh;overflow:auto;padding:14px;border:1px solid #5ad;border-radius:12px;background:rgba(5,9,20,.96);box-shadow:0 0 30px #29f4}
@@ -105,7 +105,7 @@ body.touch #engp{top:120px;right:4px;transform:scale(.8);transform-origin:top ri
 #tbtns button{height:50px;border-radius:50%;font-size:11px;padding:0;touch-action:none;background:rgba(10,24,40,.5)}
 #tbtns .fire{grid-column:span 2;height:64px;border-radius:34px;border-color:#f53;font-size:16px}
 body.touch #abar{bottom:auto;top:54px;transform:translateX(-50%) scale(.8);transform-origin:top center}
-body.touch #engp{bottom:auto;top:120px;right:6px;transform:scale(.85);transform-origin:top right}
+body.touch #engp{top:auto;bottom:70px;right:6px;transform:scale(.85);transform-origin:bottom right}
 body.touch #buffs{bottom:auto;top:116px}
 @media (max-width:700px){#mi{font-size:11px}#btns button{font-size:11px;padding:4px 5px}.cols{grid-template-columns:1fr}.ab{width:64px;height:58px}}
 
@@ -141,7 +141,7 @@ body.touch #buffs{bottom:auto;top:116px}
 <div class="rrbarw"><div class="rrbar"><i id="rrbar"></i><span id="rrenv"></span></div></div><div id="rrnet" class="rrnet"></div><div id="rrlock" class="hide"></div>
 <div id="rrrows"></div>
 <div class="rrf"><button id="rrclear">clear all (C)</button><span class="small">1-4 add a slot · Shift+1-4 remove · 10 slots max in total · bonuses drain energy</span></div>
-<div class="thrb"><button id="thr-">− S</button><div class="bar"><i id="thrbar"></i></div><button id="thr+">W +</button></div><div class="small" id="thrt" style="margin-top:3px"></div></div></div>
+<div class="thrb"><button id="thr-">− ↓</button><div class="bar"><i id="thrbar"></i></div><button id="thr+">↑ +</button></div><div class="small" id="thrt" style="margin-top:3px"></div></div></div>
 <div id="repp" class="ov hide"><h3>🔧 REPAIR BAY · ship status</h3>
 <div id="hullrow"><span class="hn">SHIP HULL</span><div class="hb"><i id="hbi"></i></div><b id="hbt"></b></div>
 <div id="repmsg"></div><div id="hlist"></div>
@@ -154,7 +154,7 @@ body.touch #buffs{bottom:auto;top:116px}
 <div id="map" class="ov hide"><div class="inner"><h2 id="maph">STAR MAP</h2><div class="small" id="mapsub" style="text-align:center"></div><div id="mcards"></div></div></div>
 <div id="banner" class="ov"></div>
 <div id="toasts" class="ov"></div>
-<div id="touch" class="ov hide"><div id="joy"><div id="knob"></div></div><div id="tbtns"><button id="t-q">Q</button><button id="t-e">E</button><button id="t-r">R</button><button id="t-alt" style="display:none">·</button><button id="t-as" style="display:none">·</button><button id="t-up">★</button><button id="t-f" class="fire">FIRE</button></div></div>
+<div id="touch" class="ov hide"><div id="joy"><div id="knob"></div></div><div id="tbtns"><button id="t-q">A</button><button id="t-e">S</button><button id="t-r">D</button><button id="t-alt" style="display:none">·</button><button id="t-as" style="display:none">·</button><button id="t-up">★</button><button id="t-f" class="fire">FIRE</button></div></div>
 <script src="defs.js"></script>
 <script src="game.js"></script>
 </body></html>

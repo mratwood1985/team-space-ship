@@ -20,7 +20,7 @@ const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() <
   let ok = true; const check = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!cond) ok = false; };
   // ---- data ----
   const RC = D.RR_CFG;
-  check(D.VERSION === 5 && D.MONEY_MULT === 1.1, 'defs: v5, money x1.1');
+  check(D.VERSION >= 5 && D.MONEY_MULT === 1.1, 'defs: v5, money x1.1');
   check(RC.max === 10 && RC.drain.length === 11 && RC.drain.every((v, i) => i === 0 || v >= RC.drain[i - 1]) && RC.drain[1] === 1, 'drain table: 10 slots, rising with every slot, 1 slot = exactly the starting regen');
   check(RC.base * RC.drain[10] > RC.base * RC.regenCap && RC.base * RC.drain[2] > RC.base && RC.base * RC.drain[2] < RC.base * 1.15, `10 slots always outdrain the best generator (${(RC.base * RC.drain[10]).toFixed(1)}/s vs max regen ${(RC.base * RC.regenCap).toFixed(1)}/s); 2 slots drop very slowly (-${(RC.base * (RC.drain[2] - 1)).toFixed(2)}/s)`);
   check(D.INNATE.engineer === 'bomb' && !D.ABIL.reroute && D.BOMB_CFG.cd > 0, 'bomb is the engineer\'s innate ability on its own cooldown; old reroute ability is gone');
@@ -50,16 +50,16 @@ const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() <
   check(E.last.sh.en >= eb0 - 0.3, `bomb costs no ship energy (${eb0} -> ${E.last.sh.en})`);
   const bl0 = E.evs.filter(e => e[0] === 'bl').length; acts(E, ['q']); await sleep(500); check(E.evs.filter(e => e[0] === 'bl').length === bl0, 'second bomb is refused while the bomb cooldown runs');
   // ---- depletion lockout ----
-  dev({ op: 'ship', v: { en: 3, lock: 0, pip: [0, 0, 0, 0] } }); await sleep(200);
+  dev({ op: 'ship', v: { en: 3, lock: 0, pip: [0, 0, 0, 0] } }); await sleep(200); E.evs.length = 0;   // v6: 10 slots drain 14/s, so the lockout can start while the slots are still being added
   for (let i = 0; i < 10; i++) { acts(E, ['u1']); await sleep(100); }
-  E.cfg = { thr: 1 }; E.evs.length = 0;
+  E.cfg = { thr: 1 };
   check(await until(() => E.last.sh.lk > 0, 4000), 'energy hit 0 -> power lockout');
   check(E.evs.some(e => e[0] === 'pwr' && e[1] === 0), 'pwr(0) event sent'); const lk0 = E.last.sh.lk;
   check(lk0 > 17 && lk0 <= 20.1, `lockout lasts 20 s (${lk0}s left)`);
   await sleep(4000); const spLock = E.last.sh.spd;
   check(spLock <= 0.25 * 140 + 3 || spLock < 60, `engine thrust capped at 25% during lockout (speed ${spLock})`);
   acts(E, ['u2']); await sleep(400); check(E.last.sh.eu >= 0, 'rerouting acts do not crash during lockout');
-  check(await until(() => E.last.sh.lk <= 0, 22000) && E.evs.some(e => e[0] === 'pwr' && e[1] === 1), 'power returns after ~20 s (pwr(1) event)');
+  check(await until(() => E.last.sh.lk <= 0 && E.evs.some(e => e[0] === 'pwr' && e[1] === 1), 22000), 'power returns after ~20 s (pwr(1) event)');
   check(E.last.sh.en > E.last.sh.em * 0.8, `energy is refilled after the lockout (${E.last.sh.en}/${E.last.sh.em})`);
   acts(E, ['z']); E.cfg = { thr: 0.65 }; await sleep(300);
   // ---- drone ----
@@ -69,7 +69,7 @@ const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() <
   check(await until(() => R.me.cr > cr0, 8000), `credits picked up (drone/ship): ${cr0} -> ${R.me.cr}`);
   check(R.me.cr - cr0 === Math.round(5 * D.MONEY_MULT), `money bonus: a 5-credit chip pays ${R.me.cr - cr0} (x${D.MONEY_MULT})`);
   E.cfg = { thr: 0 }; dev({ op: 'ship', v: { x: 0, y: 0, vx: 0, vy: 0 } }); await sleep(1500); dev({ op: 'drop', n: 5, a: 0.3, d: 380, life: 30 });
-  check(await until(() => E.last.pk.length === 0, 15000), 'drone/ship collect every dropped chip (ship parked, chips 380-460 px away)'); E.cfg = { thr: 0.65 };
+  check(await until(() => E.last.pk.length === 0, 28000), 'drone/ship collect every dropped chip (ship parked, chips 380-460 px away)'); E.cfg = { thr: 0.65 };
   dev({ op: 'spawn', type: 1, a: 0.5, d: 420, L: 2, static: 1 }); E.droneBeam = 0; await sleep(6000);
   check(E.droneBeam > 3, `drone fires its short laser beam at enemies (${E.droneBeam} beam samples)`);
   // ---- port switching ----
@@ -102,6 +102,6 @@ const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() <
   dev({ op: 'mission', i: 0, over: { type: 'defend', level: 3 } }); await sleep(1500); dev({ op: 'ship', v: { inv: 999 } }); dev({ op: 'clear' });
   const st = E.last.al.find(a => a[1] === 'fs'); check(!!st && st.length >= 9, 'station tuple carries turret angle + flash');
   check(await (async () => { dev({ op: 'ship', v: { x: st[2] + 400, y: st[3] } }); dev({ op: 'spawn', type: 0, a: Math.PI, d: 500, L: 3, static: 1 }); let fired = 0; const d = Date.now() + 9000; while (Date.now() < d) { const s2 = E.last.al.find(a => a[1] === 'fs'); if (s2 && s2[8]) fired++; await sleep(60); } return fired > 0; })(), 'the station fires its own guns at nearby enemies');
-  const hpOK = D.VERSION === 5; clearInterval(tick); E.ws.close(); R.ws.close();
+  const hpOK = D.VERSION >= 5; clearInterval(tick); E.ws.close(); R.ws.close();
   console.log(ok && hpOK ? 'V5 TESTS PASSED' : 'V5 TESTS FAILED'); process.exit(ok ? 0 : 1);
 })().catch(e => { console.error(e); process.exit(1); });
