@@ -1,7 +1,7 @@
 <!doctype html><html lang="en"><head><meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
-<title>TEAM SPACE SHIP</title>
-<meta name="description" content="Co-op space ship: crew one ship with friends (or bots). Pilot, gunners, shields, engineer, repair.">
+<title>Spacebelts Optional</title>
+<meta name="description" content="Spacebelts Optional: six crew members, an unknown sector, zero safety standards. Co-op space ship: crew one ship with friends (or bots).">
 <meta name="theme-color" content="#04050c">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cpath d='M58 32 26 20 18 4 14 24 6 28v8l8 4 4 20 8-16z' fill='%23889' stroke='%23f33' stroke-width='3'/%3E%3C/svg%3E">
 <style>
@@ -12,8 +12,40 @@ canvas#c{position:fixed;inset:0;width:100%;height:100%;display:block;cursor:cros
 button{font:inherit;color:#e8f4ff;background:rgba(14,24,40,.8);border:1px solid #5ad;border-radius:6px;padding:6px 10px;cursor:pointer}
 button:hover{background:rgba(30,60,90,.95)}button:disabled{opacity:.35;cursor:default}
 b{color:#fff}.y{color:#ffd54a}.g{color:#6f6}.r{color:#ff5a5a}.c{color:#6df}.small{font-size:12px;color:#9ab}
-#intro{inset:0;display:flex;align-items:center;justify-content:center;background:radial-gradient(ellipse at center,rgba(10,10,40,.5),rgba(0,0,0,.88))}
-#intro .box{width:min(92vw,540px);padding:22px;border:1px solid #5ad;border-radius:14px;background:rgba(6,10,22,.9);box-shadow:0 0 30px #29f4;text-align:center}
+#intro{inset:0;overflow-y:auto;overflow-x:hidden;touch-action:pan-y;background:radial-gradient(ellipse at 30% 10%,rgba(30,20,70,.55),rgba(0,0,0,.92))}
+#intro .wrap{display:grid;grid-template-columns:minmax(300px,380px) 1fr;gap:18px;max-width:1260px;margin:0 auto;padding:16px;align-items:start}
+#intro .tag{color:#ffe9a0;font-size:14px;line-height:1.45;margin:8px 0 14px;font-style:italic;text-shadow:0 0 8px #000}
+#intro .lore{font-size:12px;line-height:1.5;color:#b8c8dc;margin-bottom:10px;padding:8px 10px;border-left:3px solid #fa0;background:rgba(10,14,28,.6)}
+#intro h3{font-size:13px;letter-spacing:.12em;color:#6df;margin:8px 0 6px;text-transform:uppercase}
+.roster{display:grid;grid-template-columns:repeat(3,1fr);gap:8px}
+.rc{display:flex;gap:8px;padding:7px;border:1px solid #345;border-radius:10px;background:linear-gradient(135deg,rgba(14,22,40,.92),rgba(8,12,24,.92));cursor:pointer;min-height:112px;text-align:left}
+.rc:hover,.rc.sel{border-color:#ffd54a;box-shadow:0 0 12px #fd45}
+.rc img{width:78px;height:78px;border-radius:8px;border:2px solid var(--c,#5ad);object-fit:cover;flex:none;background:#000}
+.rc .t{font-size:11px;line-height:1.3;color:#a8b8cc}.rc .t b{display:block;font-size:13px;color:var(--c,#fff)}.rc .t em{font-style:normal;color:#ffd54a;font-size:10px;display:block;margin:1px 0 3px}
+.rc .t span{display:block;font-size:10px;color:#8a9ab0}
+.races{display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-top:6px}
+.rc.big{min-height:96px;cursor:default}.rc.big img{width:64px;height:64px}
+.rc.big .t span{font-size:10px}
+.rcr{display:flex;gap:4px}.rcr img{width:44px;height:44px;border-radius:6px;border:1px solid #5a2;object-fit:cover}
+@media (max-width:980px){#intro .wrap{grid-template-columns:1fr}.roster{grid-template-columns:repeat(2,1fr)}.races{grid-template-columns:1fr}}
+@media (max-width:560px){.roster{grid-template-columns:1fr}}
+#dlg{left:50%;bottom:94px;transform:translateX(-50%);width:min(660px,96vw);z-index:40;display:flex;gap:12px;padding:10px 12px;border:2px solid var(--c,#5ad);border-radius:12px;background:linear-gradient(135deg,rgba(8,14,30,.95),rgba(4,6,16,.93));box-shadow:0 0 22px #000a,0 0 18px var(--c,#5ad)55;pointer-events:auto;cursor:pointer}
+#dlg img{width:84px;height:84px;border-radius:9px;border:2px solid var(--c,#5ad);object-fit:cover;flex:none;background:#000}
+#dlg .dn{font-size:14px;font-weight:bold;color:var(--c,#fff);letter-spacing:.04em}#dlg .dt{font-size:14px;line-height:1.4;margin-top:3px;color:#eef4ff;min-height:40px}
+#dlg .dh{font-size:10px;color:#789;margin-top:5px;display:flex;justify-content:space-between;gap:8px;align-items:center}#dlg .dh button{font-size:11px;padding:3px 8px}
+#dlg .ch{font-size:10px;color:#fa0;letter-spacing:.14em;text-transform:uppercase}
+#comm{left:50%;top:92px;transform:translateX(-50%);width:min(520px,94vw);z-index:35;display:flex;gap:9px;padding:7px 9px;border:1px solid var(--c,#4f8);border-radius:10px;background:rgba(2,10,10,.88);box-shadow:0 0 16px var(--c,#4f8)66;pointer-events:none;animation:commin .25s ease-out}
+@keyframes commin{from{opacity:0;transform:translate(-50%,-8px)}to{opacity:1;transform:translate(-50%,0)}}
+#comm img{width:58px;height:58px;border-radius:7px;border:2px solid var(--c,#4f8);object-fit:cover;flex:none;background:#000}
+#comm .cn{font-size:12px;font-weight:bold;color:var(--c,#4f8)}#comm .ct{font-size:13px;line-height:1.35;margin-top:2px;color:#e8fff2}#comm .cs{font-size:9px;color:#6a8;letter-spacing:.14em}
+#stun{inset:0;pointer-events:none;z-index:12;background:radial-gradient(ellipse at center,rgba(60,120,255,0) 35%,rgba(70,140,255,.38) 100%);animation:stunp .35s infinite alternate}
+@keyframes stunp{from{opacity:.55}to{opacity:1}}
+#stuntxt{left:50%;top:150px;transform:translateX(-50%);z-index:13;font-size:26px;font-weight:900;letter-spacing:.2em;color:#9cf;text-shadow:0 0 14px #36f,0 0 30px #36f;pointer-events:none;text-align:center}#stuntxt small{display:block;font-size:11px;letter-spacing:.06em;color:#bdf;font-weight:normal}
+#alarmbar{left:0;right:0;top:0;height:6px;z-index:14;background:repeating-linear-gradient(90deg,#f22 0 24px,#400 24px 48px);animation:alarm .5s infinite alternate;pointer-events:none}
+@keyframes alarm{from{opacity:.25}to{opacity:1}}
+#mm{left:50%;top:50%;transform:translate(-50%,-50%);z-index:30;width:min(560px,94vw);padding:14px;border:1px solid #c8f;border-radius:12px;background:rgba(8,6,20,.94);text-align:center}
+
+#intro .left{text-align:center}#intro .box{width:100%;padding:22px;border:1px solid #5ad;border-radius:14px;background:rgba(6,10,22,.9);box-shadow:0 0 30px #29f4;text-align:center}
 h1{font-size:clamp(26px,7vw,44px);letter-spacing:5px;color:#ffe9a0;text-shadow:0 0 12px #fa0,0 0 30px #f60}
 .sub{color:#9bd;margin:6px 0 16px;font-size:13px}
 input{font:inherit;background:#020610;color:#fff;border:1px solid #5ad;border-radius:6px;padding:10px;width:100%;font-size:16px;text-align:center}
@@ -123,8 +155,10 @@ body.touch #buffs{bottom:auto;top:116px}
 @media (max-width:700px){.pyr{grid-template-columns:repeat(12,1fr)}.pn{font-size:9px;padding:3px;min-height:64px}.pn small .fxe{display:none}.pn small .fxl{font-size:9px}}
 </style></head><body>
 <canvas id="c"></canvas>
-<div id="intro" class="ov"><div class="box">
-<h1>TEAM SPACE SHIP</h1>
+<div id="intro" class="ov"><div class="wrap"><div class="left">
+<h1>SPACEBELTS OPTIONAL</h1>
+<div class="tag" id="tagline">Six crew members. An unknown sector. Zero safety standards. Let’s do this—what could possibly go wrong?</div>
+<div class="box">
 <div class="sub">One ship. Six stations. Bots crew every empty seat, so you can jump straight in.</div>
 <input id="name" maxlength="14" placeholder="Your name (optional)" autocomplete="off">
 <div class="roles" id="prefroles"></div>
@@ -133,6 +167,13 @@ body.touch #buffs{bottom:auto;top:116px}
 <div class="priv"><button id="mkpriv" style="flex:1">Create private ship</button><input id="code" maxlength="6" placeholder="CODE"><button id="joincode">Join</button></div>
 <div class="small" style="margin-top:10px">Desktop: mouse + keys · Phone: touch stick + buttons · M mutes</div>
 </div></div>
+<div class="right">
+<div class="lore"><b>The story.</b> A war rages in the galactic center, so the military cannot spare a single ship. They send the misfits instead: a ragtag crew to investigate a sector nobody has entered for thousands of years, in exchange for a top-of-the-line Chimera-class shift cruiser. They named her the <b class="y">Voided Warranty</b>. Her hull is <b class="c">Morph Metal</b>: collect it to upgrade and morph the ship into larger forms.</div>
+<h3>Meet the crew <span class="small">(click a card to pick that seat)</span></h3>
+<div class="roster" id="roster"></div>
+<h3>The sector</h3>
+<div class="races" id="races"></div>
+</div></div></div>
 <div id="top" class="ov hide"><div><div id="mi"></div><div id="crew"></div></div>
 <div id="btns"><button id="b-inv">🔗 Invite</button><button id="b-role">⇄ Role (Tab)</button><button id="b-up">★ Upgrades (U)</button><button id="b-help">? (H)</button><button id="b-mute">🔊</button><button id="b-mus">♪</button></div></div>
 <div id="abar" class="ov hide"></div>
@@ -153,8 +194,14 @@ body.touch #buffs{bottom:auto;top:116px}
 <div id="upp" class="ov panel hide"></div>
 <div id="map" class="ov hide"><div class="inner"><h2 id="maph">STAR MAP</h2><div class="small" id="mapsub" style="text-align:center"></div><div id="mcards"></div></div></div>
 <div id="banner" class="ov"></div>
+<div id="dlg" class="ov hide"></div>
+<div id="comm" class="ov hide"></div>
+<div id="stun" class="ov hide"></div><div id="stuntxt" class="ov hide">⚡ STUNNED<small>no fire · no steering · thrust at minimum</small></div>
+<div id="alarmbar" class="ov hide"></div>
+<div id="mm" class="ov hide"></div>
 <div id="toasts" class="ov"></div>
 <div id="touch" class="ov hide"><div id="joy"><div id="knob"></div></div><div id="tbtns"><button id="t-q">A</button><button id="t-e">S</button><button id="t-r">D</button><button id="t-alt" style="display:none">·</button><button id="t-as" style="display:none">·</button><button id="t-up">★</button><button id="t-f" class="fire">FIRE</button></div></div>
 <script src="defs.js"></script>
+<script src="story.js"></script>
 <script src="game.js"></script>
 </body></html>

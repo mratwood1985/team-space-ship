@@ -86,7 +86,7 @@ const CMD_DEATH = ['Hrrk... Szarkath... will not forgive...', 'Impossible...', '
 const BOSS_LINES = { p2: 'You hurt my throne? Very well. The tide rises.', p3: 'Enough! I will drown you where you float.', kill: 'It cannot be... I am the Drowned King...', open: 'Behold the Drowned Throne. Ten thousand years in the making.' };
 // voice announcements by the repair officer (Finn). Lines are [spoken, shown]
 const FINN_LINES = {
-  port: ['{} is down. {} is down. Somebody fix {}.', '{} destroyed.'],
+  port: ['{} is down. Somebody hand me a wrench.', '{} destroyed.'],
   half: ['Hull at fifty percent. We are halfway to a very bad day.', 'Hull below 50%.'],
   low: ['Hull critical. Everybody say a quiet thing.', 'Hull below 10%.'],
 };

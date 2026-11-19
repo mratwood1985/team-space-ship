@@ -10,15 +10,18 @@ const PUB = path.join(__dirname, 'public');
 const DATA = path.join(__dirname, 'data'); fs.mkdirSync(DATA, { recursive: true });
 
 // ---------- static files ----------
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css', '.png': 'image/png', '.svg': 'image/svg+xml', '.json': 'application/json' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css', '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.json': 'application/json' };
 let files = {};
 function loadFiles() {
   const f2 = {};
-  for (const f of fs.readdirSync(PUB)) {
-    const p = path.join(PUB, f); if (!fs.statSync(p).isFile()) continue;
-    const b = fs.readFileSync(p);
-    f2['/' + f] = { raw: b, gz: zlib.gzipSync(b, { level: 9 }), type: MIME[path.extname(f)] || 'application/octet-stream', etag: '"' + crypto.createHash('md5').update(b).digest('hex').slice(0, 12) + '"' };
-  }
+  const walk = (dir, pre) => {
+    for (const f of fs.readdirSync(dir)) {
+      const p = path.join(dir, f), st = fs.statSync(p); if (st.isDirectory()) { walk(p, pre + f + '/'); continue; } if (!st.isFile()) continue;
+      const b = fs.readFileSync(p), bin = /\.(webp|png|jpg)$/.test(f);   // v7: portraits live in public/img/*.webp (already compressed: no gzip)
+      f2['/' + pre + f] = { raw: b, gz: bin ? null : zlib.gzipSync(b, { level: 9 }), bin, type: MIME[path.extname(f)] || 'application/octet-stream', etag: '"' + crypto.createHash('md5').update(b).digest('hex').slice(0, 12) + '"' };
+    }
+  };
+  walk(PUB, '');
   f2['/'] = f2['/index.html']; files = f2;
 }
 loadFiles();
@@ -777,9 +780,9 @@ class Room {
       if (b.dead) continue;
       for (const e of this.enemies) {
         if (e.dead || e.warp > 0 || b.hit.includes(e.id)) continue;
-        const T = ETYPES[e.type], rr = e.r + 4 + (T.mp ? 44 : 0); if ((e.x - b.x) ** 2 + (e.y - b.y) ** 2 > rr * rr) continue;
+        const T = ETYPES[e.type], rr = e.r + 4 + (T.mp ? 44 : 0) + (b.ion ? 20 : 0); if ((e.x - b.x) ** 2 + (e.y - b.y) ** 2 > rr * rr) continue;
         const pm = (e.paint > 0 ? 1.5 : 1) * b.brk;
-        if (b.ion) { if (!T.mp || this.inHull(e, b.x, b.y) || segD2(ox, oy, b.x, b.y, e.x, e.y) < (e.r * 0.8) ** 2) { this.ionEnemy(e, b); b.dead = 1; this.ev('x', b.id); break; } continue; }
+        if (b.ion) { if (!T.mp ? segD2(ox, oy, b.x, b.y, e.x, e.y) < (e.r + 8) ** 2 : this.inHull(e, b.x, b.y) || segD2(ox, oy, b.x, b.y, e.x, e.y) < (e.r * 0.8) ** 2) { this.ionEnemy(e, b); b.dead = 1; this.ev('x', b.id); break; } continue; }
         if (T.mp) {
           const inside = this.inHull(e, b.x, b.y);
           if (e.sh > 0) { if (inside || segD2(ox, oy, b.x, b.y, e.x, e.y) < (e.r * 0.8) ** 2) { this.damageEnemy(e, -2, b.dmg * pm); b.dead = 1; this.ev('x', b.id); break; } continue; }
@@ -1185,6 +1188,9 @@ function devOp(R, c, m) {
   else if (m.op === 'phase') { R.phase = m.ph; R.phaseT = m.secs || 40; if (m.ph === 'upgrade') R.result = R.result || { win: 1, bonus: 30, cores: 1, name: 'Test', type: 'pirates' }; c.dirty = 1; }
   else if (m.op === 'spawn') { const a = +m.a || 0, d = +m.d || 700; const e = R.addEnemy(m.type | 0, s.x + cos(a) * d, s.y + sin(a) * d, m.L || 8, 'dom', true); e.a = a + PI; if (m.static) e.cd = 1e9; if (m.hpx) { e.hp *= m.hpx; e.mhp *= m.hpx; } }
   else if (m.op === 'clear') { R.enemies = []; R.eb = []; }
+  else if (m.op === 'ionhit') R.hitShip(s.x, s.y, 1, 1, { t: 3 });   // v7 dev: the ship takes an ion hit (stun)
+  else if (m.op === 'estun') { for (const e of R.enemies) e.stun = +m.v || 3; }
+  else if (m.op === 'ionbolt') { const a = +m.a || 0, d = +m.d || 900; R.fireEB(s.x + cos(a) * d, s.y + sin(a) * d, a + PI, 'ion', s, m.L || 8); }
   else if (m.op === 'mission') { R.startMission(Object.assign({}, R.options[m.i | 0 || 0], m.over || {})); }
   else if (m.op === 'ship') { Object.assign(s, m.v || {}); }
   else if (m.op === 'path') { const P = c.prof.t[m.tree]; P.path = (m.path || []).slice(0, 5); c.dirty = 1; R.calcStats(); }
@@ -1205,8 +1211,8 @@ function start() {
     let f = files[u]; if (!f && /^\/r\/[A-Za-z0-9]+$/.test(u)) f = files['/'];
     if (!f) { res.writeHead(404); return res.end('not found'); }
     if (req.headers['if-none-match'] === f.etag) { res.writeHead(304); return res.end(); }
-    const gz = /gzip/.test(req.headers['accept-encoding'] || '');
-    res.writeHead(200, { 'content-type': f.type, 'cache-control': 'no-cache', etag: f.etag, ...(gz ? { 'content-encoding': 'gzip' } : {}) });
+    const gz = !f.bin && /gzip/.test(req.headers['accept-encoding'] || '');
+    res.writeHead(200, { 'content-type': f.type, 'cache-control': f.bin ? 'public, max-age=3600' : 'no-cache', etag: f.etag, ...(gz ? { 'content-encoding': 'gzip' } : {}) });
     res.end(gz ? f.gz : f.raw);
   });
   const wss = new WebSocketServer({ server, path: '/ws', maxPayload: 4096, perMessageDeflate: { threshold: 256, zlibDeflateOptions: { level: 3 } } });

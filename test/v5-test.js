@@ -69,14 +69,16 @@ const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() <
   check(await until(() => R.me.cr > cr0, 8000), `credits picked up (drone/ship): ${cr0} -> ${R.me.cr}`);
   check(R.me.cr - cr0 === Math.round(5 * D.MONEY_MULT), `money bonus: a 5-credit chip pays ${R.me.cr - cr0} (x${D.MONEY_MULT})`);
   E.cfg = { thr: 0 }; dev({ op: 'ship', v: { x: 0, y: 0, vx: 0, vy: 0 } }); await sleep(1500); dev({ op: 'drop', n: 5, a: 0.3, d: 380, life: 30 });
-  check(await until(() => E.last.pk.length === 0, 28000), 'drone/ship collect every dropped chip (ship parked, chips 380-460 px away)'); E.cfg = { thr: 0.65 };
+  const pin = setInterval(() => dev({ op: 'ship', v: { x: 0, y: 0 } }), 250);   // thr 0 means the default 0.65 on the wire, so keep the ship parked by hand
+  const allPk = await until(() => E.last.pk.length === 0, 28000); clearInterval(pin);
+  check(allPk, 'drone/ship collect every dropped chip (ship parked, chips 380-460 px away)'); E.cfg = { thr: 0.65 };
   dev({ op: 'spawn', type: 1, a: 0.5, d: 420, L: 2, static: 1 }); E.droneBeam = 0; await sleep(6000);
   check(E.droneBeam > 3, `drone fires its short laser beam at enemies (${E.droneBeam} beam samples)`);
   // ---- port switching ----
   dev({ op: 'hurt', k: [3, 4] }); dev({ op: 'ship', v: { hull: 20 } }); await sleep(400);
   R.cfg = { rt: 3 }; await sleep(700); check(R.last.sh.tk[0] === 3, 'click engines -> repairing engines');
   R.cfg = { rt: 3, mb: 1 }; await sleep(700); R.cfg = { rt: 4, mb: 1 }; await sleep(500); check(R.last.sh.tk[0] === 4, 'switch to deflector immediately, even mid-minigame');
-  R.cfg = { rt: 18, mb: 1 }; await sleep(500); check(R.last.sh.tk[0] === 18, 'switch to the hull immediately');
+  R.cfg = { rt: D.HULL_T, mb: 1 }; await sleep(500); check(R.last.sh.tk[0] === D.HULL_T, 'switch to the hull immediately');
   R.cfg = { rt: 3 }; await sleep(500); check(R.last.sh.tk[0] === 3, 'switch back to engines immediately');
   R.cfg = { rt: -1 }; dev({ op: 'ship', v: { hull: 999 } });
   // ---- spawns: only docks or map edges ----

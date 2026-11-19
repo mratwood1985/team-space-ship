@@ -1,4 +1,6 @@
-# TEAM SPACE SHIP
+# Spacebelts Optional
+
+*Six crew members. An unknown sector. Zero safety standards. Let's do this—what could possibly go wrong?*
 
 Co-op, real-time browser game. One ship, six stations (Pilot, Port/Starboard Gunners, Shields, Engineer, Repair). Bots crew every empty seat, so the public ship is always running and joinable. Desktop (mouse + keys) and phone (touch) controls.
 
@@ -17,10 +19,32 @@ npm test           # websocket integration test against localhost:8080
 
 ## Files
 - `server.js`: server-authoritative sim (30 Hz, 15 Hz snapshots), bots, missions, rooms, websocket + static server
+- `public/story.js`: title, tagline, crew, races, commanders, villain, chapters, cutscene and comm lines (shared by server and client)
+- `public/img/`: 13 WebP portraits (192x192, ~95 KB in total)
 - `public/defs.js`: shared game data (roles, skill pyramids, abilities, ship geometry per Mk, ports, enemies, missions, planet kinds), loaded by server and client
 - `public/game.js`, `public/index.html`: Canvas 2D client, procedural art (ships, enemies, noise-lit planets), WebAudio SFX/music, HUD, touch controls
 - `test/ws-test.js`: integration test (`npm test`; run the server with `DEV_TOOLS=1` to also exercise purchases, ports, Mk upgrades and spawned enemies)
 - `test/shot-v3.js`: staged headless screenshots (ship tiers, shield arc, pyramid, docks, planets); `test/shot-flow.js`: play-through screenshots incl. mobile (need Chrome + puppeteer-core)
+
+## What is new in v7 (update number 6): Spacebelts Optional
+The game is now **Spacebelts Optional** (title screen, lobby, page title, this README). `/health` reports `v:7`.
+
+**Story.** A war rages at the galactic center, so the military cannot spare a single ship. They send six misfits to explore a sector nobody has entered for thousands of years, in exchange for a top-of-the-line Chimera-class shift cruiser. They named her the **Voided Warranty**. Crew cores are now **Morph Metal**. Twelve chapters (`public/story.js`): pirates, hostages, escort, refugees, station, defense, flagship, siege, survival, bomb run, the Admiral's last orders, and the finale. Past chapter 12 the campaign keeps going with the usual extended missions.
+- **Crew** (shown on the opening page before you join, click a card to pick that seat): Skids Vantail (Red Flying Squirrel, F, Pilot), Boomer Hopkins (Kangaroo, M, Starboard Gunner), Finn Halloran (Arctic Fox, M, Repair), Mort Gazewell (Basilisk Lizard, M, Engineer), Ophelia Quill (Owl, F, Shields), Ember Ashmaw (Dragon, F, Port Gunner). Bots use the same names.
+- **Vorrakh** (croc war-clan, the enemy). Commanders: Kraal Skullchain, Durmok the Veiled, Grakk Ironjaw, Admiral Sskarra Venomtongue, plus lieutenants. Each sits on a named ship or station that you must destroy (name label + intro/death comm).
+- **Mireth** (friendly desert cats): Ishkara and Tavi chat during missions and send one care package per mission (+6 hull, some credits).
+- **Szarkath, the Drowned King** (overarching villain): taunts every 30-44 s from chapter 2, sends extra waves from chapter 3, and is only fought in chapter 12 as **The Drowned Throne**: 14 hard-points, 420 shield (x2.3 at level 12), 60 HP ports, three phases (45% and 80% of ports destroyed), +3 Morph Metal on the win.
+- **Cutscenes** before and after each main chapter are dialogue panels over the live game: nothing pauses, they auto-advance, click = next, Esc/Skip = skip (local only, so bots and votes never wait for them). The briefing plays once per chapter per room; the debrief only after a win. Villain and commander comm popups appear in missions.
+
+**Ion bolts.** Blue, speed 400 px/s, 4.2 s life (~1680 px range), 10 s base cooldown. A hit **stuns for 3 s**: no firing, no steering, thrust at minimum; on the ship the hull damage is x0.6 and it drains 7 shield hit points (rapid shield loss). Works on players and enemies (enemies move at 25% and cannot fire; capital ships stun 1.5 s, the final boss 1 s with a 6 s immunity). Enemies use them rarely: one port on destroyer, dreadnought, station and boss, plus the uncommon Lancer fighter (spawn weight 0.35). Clear stun effect: blue arcs on the ship, "STUNNED" overlay and a timer. **Shield player: click fires an ion bolt** (costs 1.5 shield HP, 7 s cooldown, needs >2 shield HP; drains an enemy shield by max(12, 50% of its max) and stuns it).
+
+**Finn (Repair) speaks.** Web Speech API with a low male voice (pitch 0.78) and a comm beep + popup: "Port down" and "Hull below 50%" announcements, heard by everybody, rate-limited (7.5 s, 3 s when urgent). Hull bar is bigger (18 px, 50% and 10% ticks). **Below 10% hull a ship alarm** (siren + red screen edge) plays for everyone until the hull is above 10% or the ship is destroyed.
+
+**Mk IV Leviathan (Voided Warranty).** New bigger sprite, hull 40 + 12 x Mk (76), costs **45 Morph Metal** (Mk II 10, Mk III 22), **one more port per player** (4th/elite port 750 c): its effect is x1.6, port upgrades give x1.5, +2 max levels and +1.5 section HP. After Mk IV every spare Morph Metal is either **sold for 15 c x1.1 per crew member** or poured into the hull as **+1 max hull HP** (permanent, survives ship resets).
+
+**Skill pyramid row 2.** The 2nd and 4th node have no ability, so each now carries a small bonus: pilot graze +4% / nose fire rate +6%; gunners turret damage +6% / turret fire rate +6%; engineer rerouting +6% / bomb cooldown -8%; shields regen +0.06 hp/s +3 hp / +0.2 regen +1 hp; repair drone damage +8% / drone armor +1.
+
+Tests: `test/v7-test.js` (needs `DEV_TOOLS=1`), `test/shot-v7.js` (screenshots, `screens/v7-*.jpg`).
 
 ## What is new in v6 (update number 5)
 - **Repair drones**: click the map to send them to a spot (they hold it for 10 s, fire from there and grab loot nearby, max 1800 px away); right-click or G returns them to auto. Separation steering plus a hard 34 px minimum distance: they never overlap. Damage 2.6 -> 1.7 dps, speed 340 -> 255 px/s, base HP 5.

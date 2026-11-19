@@ -18,7 +18,7 @@ const ROLE_HELP = [
   'Aim + hold click to fire your starboard (right) turret. Your red bolts shoot down missiles and flak. If the port turret is destroyed you get a full 360° arc.',
   '<b>Click a damaged port</b> in your big side panel (or press 1-6, 0 = hull) to start repairing it: it then repairs <b>automatically</b>, and the port\'s own <b>minigame</b> makes it faster (up to +100%). Your little starship drones are out by default and <b>fly themselves</b>: they burn nearby enemies with a short-range laser and pick up credits and items. <b>Click anywhere on the map</b> to send them to that spot (to grab loot or shoot from another angle), right-click to call them back. <b>Recall them (G)</b> to repair 50% faster. You cannot repair the Repair Bay; if it is destroyed your crewmates must click it back online, and until then you can neither repair nor use the drone.',
   'You alone control speed: ↑/↓ arrow keys or the mouse wheel = throttle. You also <b>reroute power</b>: you have <b>10 slots</b> to spread over Engines (top speed + quicker throttle), Weapons (gun fire rate), Shields (faster recharge, <b>much stronger and more durable shield</b>) and Repair (faster repairs). Keys 1-4 add a slot, Shift+1-4 remove one. Every filled slot drains the ship\'s energy, and each extra slot drains faster: with all 10 filled the bar always falls. At 0 energy rerouting is off and engine thrust is capped at 25% for 20 s. <b>A = Proton Bomb</b> (own cooldown, no energy). Engines destroyed = the ship slowly stalls until repaired.',
-  'Aim to place the blue shield arc: it stays where you point it even when the ship turns. It blocks ALL enemy fire until its HP is gone, then it needs 20 s to recharge. Buy HP and arc width (starts 15°, max 90°) in the upgrades; the Lance abilities fire the shield as a weapon.',
+  '<b>Click = ION BOLT</b> (blue, long range, 7 s cooldown, costs 1.5 shield HP): a hit stuns an enemy for 3 s (no firing or steering) and tears down its shield. Aim to place the blue shield arc: it stays where you point it even when the ship turns. It blocks ALL enemy fire until its HP is gone, then it needs 20 s to recharge. Buy HP and arc width (starts 15°, max 90°) in the upgrades; the Lance abilities fire the shield as a weapon.',
   'Aim + hold click to fire your port (left) turret. Your red bolts shoot down missiles and flak. If the starboard turret is destroyed you get a full 360° arc.'];
 const COMMON = 'Your station destroyed? Ask the Repair crew to click it. <b>If the Repair Bay is destroyed, everybody mashes CLICK RAPIDLY</b> to fix it. <b>A / S / D</b> = your three abilities (pick them in the skill pyramid, U). <b>Tab</b> switch role · <b>H</b> help.';
 
@@ -62,7 +62,7 @@ function noise(d, vol = 0.2, f = 1200, f2 = 100, type = 'lowpass', x = null, del
   s.connect(fl); fl.connect(g); g.connect(x == null ? A.sfx : panNode(x)); s.start(t, random() * 0.5); s.stop(t + d + 0.05);
 }
 const SFX = {
-  laser(k, x) { if (k === 5) { if (gate('l5', 150)) { tone(240, 0.28, 'sawtooth', 0.08, 1500, x); tone(90, 0.3, 'square', 0.05, 40, x); } return; } if (k === 3) k = 1.5; if (k === 2) { if (gate('l2', 70)) tone(700, 0.11, 'sawtooth', 0.05, 160, x); } else if (k === 3) { if (gate('l3', 80)) tone(1800, 0.06, 'square', 0.025, 900, x); } else if (gate('l1', 45)) tone(1100 + random() * 150, 0.1, 'sawtooth', 0.035, 200, x); },
+  laser(k, x) { if (k === 6) return; if (k === 5) { if (gate('l5', 150)) { tone(240, 0.28, 'sawtooth', 0.08, 1500, x); tone(90, 0.3, 'square', 0.05, 40, x); } return; } if (k === 3) k = 1.5; if (k === 2) { if (gate('l2', 70)) tone(700, 0.11, 'sawtooth', 0.05, 160, x); } else if (k === 3) { if (gate('l3', 80)) tone(1800, 0.06, 'square', 0.025, 900, x); } else if (gate('l1', 45)) tone(1100 + random() * 150, 0.1, 'sawtooth', 0.035, 200, x); },
   elaser(t, x, ion) { if (ion) { if (gate('ion', 120)) { tone(180, 0.4, 'sawtooth', 0.09, 60, x); noise(0.3, 0.1, 900, 100, 'lowpass', x); } return; } if (t === 1) { if (gate('em', 120)) noise(0.25, 0.05, 600, 2400, 'bandpass', x); } else if (gate('el', 70)) tone(520, 0.12, 'square', 0.022, 150, x); },
   rocket(x) { if (gate('rk', 90)) noise(0.3, 0.07, 500, 3000, 'bandpass', x); },
   boom(sz, x) { if (!gate('boom' + sz, 50)) return; const d = 0.25 + sz * 0.25; noise(d, 0.18 + sz * 0.09, 2400, 50, 'lowpass', x); tone(110, d, 'sine', 0.22 + sz * 0.05, 26, x); },
@@ -169,8 +169,9 @@ const TIER = [
   { c1: '#d9dde3', c2: '#747a85', acc: '#d02a2a', lite: '#ff8a8a' },
   { c1: '#c0c6cf', c2: '#4a5260', acc: '#ffa21a', lite: '#ffd38a' },
   { c1: '#9aa3b8', c2: '#262c3c', acc: '#37d6ff', lite: '#bff4ff' },
+  { c1: '#d6dcea', c2: '#1a2a3e', acc: '#7dffd0', lite: '#e6fff5' },   // v7 Mk IV Leviathan: pale Morph Metal with mint-green veins
 ];
-const ENGN = [[[-46, -9], [-46, 0], [-46, 9]], [[-84, -13], [-84, 13], [-80, 0]], [[-112, -18], [-112, -7], [-112, 7], [-112, 18]]];
+const ENGN = [[[-46, -9], [-46, 0], [-46, 9]], [[-84, -13], [-84, 13], [-80, 0]], [[-112, -18], [-112, -7], [-112, 7], [-112, 18]], [[-126, -27], [-126, -16], [-126, -5], [-126, 5], [-126, 16], [-126, 27]]];
 function socket(g, x, y, r = 6) { g.fillStyle = '#12151a'; g.beginPath(); g.arc(x, y, r, 0, TAU); g.fill(); g.strokeStyle = '#6f7682'; g.lineWidth = 1.2; g.stroke(); g.strokeStyle = 'rgba(255,255,255,.12)'; g.beginPath(); g.arc(x, y, r - 2, 0, TAU); g.stroke(); }
 function stationArt(g, mk, tc) {
   const G = GEO[mk];
@@ -186,7 +187,7 @@ function stationArt(g, mk, tc) {
   for (const i of [1, 5]) socket(g, G.st[i][0], G.st[i][1], 8 + mk);
 }
 function playerSprite(mk) {
-  const tc = TIER[mk], dims = [[130, 92], [196, 136], [256, 156]][mk];
+  const tc = TIER[mk], dims = [[130, 92], [196, 136], [256, 156], [316, 190]][mk];
   return spr('pl' + mk, dims[0], dims[1], (g, R) => {
     const G = GEO[mk];
     if (mk === 0) { // Mk I Corvette: sleek red-striped wedge
@@ -203,6 +204,21 @@ function playerSprite(mk) {
       shipBody(g, R, mirror([[74, 0], [58, -6], [36, -10], [10, -16], [-30, -20], [-60, -22], [-78, -14], [-82, -6]]), 70, tc.c1, tc.c2);
       shipBody(g, R, mirror([[44, 0], [20, -7], [-28, -11], [-44, -6]]), 50, '#e2e5ea', '#808793');
       g.fillStyle = tc.acc; g.fillRect(-20, -1.5, 32, 3);
+    } else if (mk === 3) { // v7 Mk IV Leviathan: swept morph-metal wings, twin bow spears, glowing spine, six engines
+      for (const s of [-1, 1]) {
+        shipBody(g, R, [[78, 24 * s], [62, 62 * s], [24, 82 * s], [-30, 86 * s], [-88, 76 * s], [-112, 44 * s], [-84, 28 * s]], 120, tc.c1, tc.c2);
+        shipBody(g, R, [[46, 66 * s], [14, 84 * s], [-30, 88 * s], [-40, 74 * s]], 40, '#46567a', '#141c30');
+        shipBody(g, R, [[112, 10 * s], [98, 22 * s], [70, 26 * s], [76, 8 * s]], 24, '#e6ecf8', '#5a6a8a');
+        g.strokeStyle = tc.acc; g.lineWidth = 1.8; g.beginPath(); g.moveTo(62, 62 * s); g.lineTo(24, 82 * s); g.lineTo(-30, 86 * s); g.lineTo(-88, 76 * s); g.moveTo(98, 22 * s); g.lineTo(70, 26 * s); g.stroke();
+        g.fillStyle = tc.lite; for (let k = 0; k < 7; k++) g.fillRect(40 - k * 18, 74 * s - 1, 5, 2.2);
+        g.strokeStyle = 'rgba(125,255,208,.55)'; g.lineWidth = 1; g.beginPath(); g.moveTo(20, 30 * s); g.quadraticCurveTo(10, 60 * s, -50, 70 * s); g.stroke();
+      }
+      shipBody(g, R, mirror([[116, 0], [100, -7], [66, -15], [30, -26], [-20, -30], [-70, -32], [-114, -30], [-128, -22], [-131, 0]]), 130, tc.c1, tc.c2);
+      shipBody(g, R, mirror([[84, 0], [34, -11], [-44, -17], [-110, -21], [-118, 0]]), 90, '#c4cde0', '#44506c');
+      shipBody(g, R, mirror([[36, 0], [20, -11], [-10, -11], [-26, 0]]), 34, '#e4eaf4', '#6a7894');
+      g.strokeStyle = tc.acc; g.lineWidth = 2; g.beginPath(); g.moveTo(112, 0); g.lineTo(-120, 0); g.stroke(); g.strokeStyle = 'rgba(125,255,208,.5)'; g.lineWidth = 1; for (const y of [-12, 12]) { g.beginPath(); g.moveTo(80, y * 0.3); g.lineTo(-100, y); g.stroke(); }
+      g.fillStyle = tc.acc; g.fillRect(-6, -2.5, 16, 5); g.fillStyle = '#e6c870'; g.fillRect(-112, -26, 3, 52);
+      for (const y of [-27, -16, -5, 5, 16, 27]) { g.fillStyle = '#0e1116'; g.beginPath(); g.arc(-127, y, 6, 0, TAU); g.fill(); g.fillStyle = tc.acc; g.beginPath(); g.arc(-127, y, 2.5, 0, TAU); g.fill(); }
     } else { // Mk III Battlecruiser: armored sponsons, command tower, quad engines
       for (const s of [-1, 1]) {
         shipBody(g, R, [[60, 22 * s], [52, 50 * s], [20, 62 * s], [-24, 64 * s], [-70, 58 * s], [-82, 36 * s], [-60, 26 * s]], 90, tc.c1, tc.c2);
@@ -413,7 +429,7 @@ function evName(i) { const c = lastSnap && lastSnap.crew[i]; return c ? c[0] : R
 function secWorldLocal(k, mk) { return D.secLocal(GEO[mk], k); }
 function processEvents(s) {
   for (const e of s.ev) {
-    const k = e[0];
+    const k = e[0]; if (v7Event(e, s)) continue;
     if (k === 'b') { bolts.set(e[1], { x: e[2], y: e[3], vx: e[4], vy: e[5], kind: e[6], life: e[7] }); SFX.laser(e[6], e[2]); if (e[6] !== 4) P({ k: 2, x: e[2], y: e[3], life: e[6] === 5 ? 0.14 : 0.06, max: e[6] === 5 ? 0.14 : 0.06, r: e[6] === 5 ? 34 : 10, c: e[6] === 3 ? PORT_ORANGE : e[6] === 5 ? '#ff7af5' : PLAYER_RED }); }
     else if (k === 'x') { const b = bolts.get(e[1]); if (b) { sparks(b.x, b.y, 4, '#ff8a60', 140, 0.25, 1.5); bolts.delete(e[1]); } }
     else if (k === 'ef') { P({ k: 2, x: e[1], y: e[2], life: e[4] ? 0.25 : 0.08, max: e[4] ? 0.25 : 0.08, r: e[4] ? 30 : 12, c: ENEMY_GREEN }); SFX.elaser(e[3], e[1], e[4]); }
@@ -453,7 +469,7 @@ function processEvents(s) {
     else if (k === 'launch') { if (me.role === REPAIR) SFX.launch(); }
     else if (k === 'rk') SFX.rocket();
     else if (k === 'chg') SFX.charge();
-    else if (k === 'pick') { if (e[1]) { SFX.core(); toast('◆ Crew core collected!', '#6df'); } else SFX.coin(); if (cur) floaters.push({ x: cur.x, y: cur.y - 40, t: 1, s: e[1] ? '+1 ◆' : '+' + e[2] + ' ¢', c: e[1] ? '#6df' : '#ffd54a' }); }
+    else if (k === 'pick') { if (e[1]) { SFX.core(); toast('◆ Morph Metal collected!', '#6df'); } else SFX.coin(); if (cur) floaters.push({ x: cur.x, y: cur.y - 40, t: 1, s: e[1] ? '+1 ◆' : '+' + e[2] + ' ¢', c: e[1] ? '#6df' : '#ffd54a' }); }
     else if (k === 'jump') { ring(e[1], e[2], 4, 120, 0.6, '#9cf', 4); toast('🚀 Freighter jumped to safety', '#9cf'); }
     else if (k === 'resc') { ring(e[1], e[2], 4, 80, 0.5, '#7f7', 3); toast('🛟 Hostage pod rescued', '#7f7'); SFX.fixed(); }
     else if (k === 'wave') { banner('WAVE ' + e[1], 1.5); SFX.wave(); }
@@ -592,15 +608,15 @@ function renderUp() {
   const s = lastSnap, mk = s.mk, T = TREES[upTree], P = me.tr[upTree], inMission = s.ph === 'mission' || s.ph === 'result';
   const btn = (attrs, html, dis, cls = '') => `<button class="nd ${cls}" ${attrs} ${dis ? 'disabled' : ''}>${html}</button>`;
   const myT = TREE_OF[me.role];
-  let h = `<h2>★ UPGRADES · <span class="y">${me.cr} ¢</span> · <span class="c">${s.co} ◆ crew cores</span> · ${MK_NAMES[mk]}</h2>`;
+  let h = `<h2>★ UPGRADES · <span class="y">${me.cr} ¢</span> · <span class="c">${s.co} ◆ Morph Metal</span> · ${MK_NAMES[mk]}${s.hpl ? ` · <span class="g">+${s.hpl} hull plating</span>` : ''}</h2>`;
   h += `<div class="row" style="margin:4px 0">${Object.keys(TREES).map(k => `<button data-tree="${k}" style="flex:0 0 auto;min-width:0;${k === upTree ? 'border-color:#ffd54a;color:#ffd54a' : ''}">${TREE_LABEL[k]}${k === myT ? ' (you)' : ''}</button>`).join('')}</div>`;
   if (inMission) h += '<div class="small r">Purchases unlock after the mission. You can still plan here.</div>';
-  h += `<div class="small">Credits come from kills, big-ship drops and a completion bonus (the whole crew earns the same). Missions are long: expect to need <b>many</b> to finish a tree. Cores (◆) are rare and shared: Mk II costs ${MK_COST[1]} ◆, Mk III ${MK_COST[2]} ◆. After Mk III each spare ◆ converts to <b>${CORE_RATE} ¢</b> per crew member.</div>`;
+  h += `<div class="small">Credits come from kills, big-ship drops and a completion bonus (the whole crew earns the same). Missions are long: expect to need <b>many</b> to finish a tree. Morph Metal (◆) is rare and shared: Mk II costs ${MK_COST[1]} ◆, Mk III ${MK_COST[2]} ◆, <b>Mk IV Leviathan ${MK_COST[3]} ◆</b>. After Mk IV each spare ◆ is either sold for <b>${CORE_RATE} ¢</b> per crew member or poured into the hull for <b>+${D.HULL_PER_METAL} max hull HP</b> (permanent).</div>`;
   // ship tier panel
   const nextMk = mk + 1;
-  h += `<div class="mkrow"><canvas id="mkprev" width="260" height="110"></canvas><div>` + (nextMk <= 2
-    ? `<div class="small">Ship upgrade: the hull physically grows (Mk II and III are larger) and every crew station gains <b>one new permanent port socket</b>.</div><button data-mk ${s.co < MK_COST[nextMk] || inMission ? 'disabled' : ''} style="border-color:#6df;margin-top:4px">🛠 Upgrade ship to <b>${MK_NAMES[nextMk]}</b> · ${MK_COST[nextMk]} ◆ (crew-wide, resets damage)</button>`
-    : `<div class="small g">Ship fully upgraded (Mk III).</div><button data-core ${s.co < 1 || inMission ? 'disabled' : ''} style="border-color:#ffd54a;margin-top:4px">◆ → ¢ Convert 1 core into ${CORE_RATE} ¢ for every crew member (${s.co} ◆ banked)</button>`) + `</div></div>`;
+  h += `<div class="mkrow"><canvas id="mkprev" width="260" height="110"></canvas><div>` + (nextMk <= 3
+    ? `<div class="small">Ship upgrade: the hull physically grows (the Mk IV Leviathan is the biggest) and every crew station gains <b>one new permanent port socket</b>${nextMk === 3 ? ' — an <b class="c">Elite</b> one: stronger than any earlier port' : ''}.</div><button data-mk ${s.co < MK_COST[nextMk] || inMission ? 'disabled' : ''} style="border-color:#6df;margin-top:4px">🛠 Upgrade ship to <b>${MK_NAMES[nextMk]}</b> · ${MK_COST[nextMk]} ◆ (crew-wide, resets damage)</button>`
+    : `<div class="small g">Ship fully upgraded (${MK_NAMES[3]}). <b>${s.co} ◆ Morph Metal</b> banked: choose what to do with it.</div><div class="row"><button data-core ${s.co < 1 || inMission ? 'disabled' : ''} style="border-color:#ffd54a;margin-top:4px">◆ → ¢ SELL 1 Morph Metal: +${CORE_RATE} ¢ for every crew member</button><button data-corehull ${s.co < 1 || inMission ? 'disabled' : ''} style="border-color:#6f6;margin-top:4px">◆ → ♥ HULL PLATING: +${D.HULL_PER_METAL} max hull HP for the ship, permanent (now ${s.sh.hm}, +${s.hpl || 0} from metal)</button></div>`) + `</div></div>`;
   // pyramid
   const pr = P.path.length;
   h += `<h4 class="ph">${T.name || TREE_LABEL[upTree]} skill pyramid <span class="small">· pick ONE node per row, top to bottom. The next row only offers the nodes touching your last pick (an edge pick leaves one choice, a middle pick two). Edge nodes are ~25% stronger; the bottom two are the best.${pr >= 5 ? ' <b class="g">Complete.</b>' : ' Now choosing row ' + (pr + 1) + ' of 5 · ' + NODE_COST[pr] + '¢'}</span></h4>`;
@@ -611,13 +627,13 @@ function renderUp() {
   if (upTree === myT) {
     const crew = s.crew[me.role], inst = crew[7] || [0, 0];
     h += `<h4 class="ph">Ship ports for your station (${RNAME[me.role]}) <span class="small">· a port is a real section on the hull: it can be destroyed on its own (small fire, benefits lost) and each port is upgraded separately. <b class="r">A port choice is permanent.</b></span></h4><div class="row">`;
-    for (let sl = 0; sl < 2; sl++) {
-      h += `<div class="col"><h4>Port ${sl + 1} ${sl >= mk ? `<span class="c">(needs ${MK_NAMES[sl + 1]})</span>` : ''}</h4>`;
+    for (let sl = 0; sl < 3; sl++) {
+      h += `<div class="col"><h4>${sl === 2 ? '<span class="c">★ ELITE</span> Port 3' : 'Port ' + (sl + 1)} ${sl >= mk ? `<span class="c">(needs ${MK_NAMES[sl + 1]})</span>` : ''}</h4>${sl === 2 ? `<div class="small">Elite: effect ×${D.ELITE.eff}, upgrades ×${D.ELITE.per}, +${D.ELITE.maxLv} max upgrade levels, +${D.ELITE.secHp} section HP.</div>` : ''}`;
       const p = inst[sl];
-      if (p) { const t = T.ports.find(x => x[0] === p[0]), lv = p[1], c = portUpCost(lv), u = p[2] || {}, opts = D.PORT_UPS[upTree + '.' + p[0]] || [D.PU_HP];
-        h += `<div class="nd own"><b>✔ ${t[1]}</b> · ${lv} upgrade level${lv === 1 ? '' : 's'} bought<small>${t[2]} <b>Next upgrade costs ${c}¢</b> (price rises with each level bought on this port).</small></div>`;
-        h += opts.map(d => { const l = u[d.o] || 0, full = l >= d.max; return btn(`data-pup="${sl}" data-opt="${d.o}"`, `▲ <b>${d.n}</b> · Lv ${l}/${d.max} ${full ? '(max)' : '· ' + c + '¢'}<small class="fxs"><span class="fxl">${d.d}</span><span class="fxl"><u>Now</u>: ${l ? D.puVal(d, l) : 'none'}${full ? '' : ' → ' + D.puVal(d, l + 1)}</span></small>`, full || me.cr < c || inMission); }).join(''); }
-      else h += T.ports.map(p => { const pend = portPending && portPending[0] === sl && portPending[1] === p[0]; return btn(`data-port="${sl}" data-id="${p[0]}"`, `<b>${pend ? '⚠ CLICK AGAIN: PERMANENT · ' : ''}${p[1]}</b> · ${PORT_COST[sl]}¢<small class="fxs"><span class="fxl">${p[2]}</span><span class="fxl"><u>Upgrades</u>: ${(D.PORT_UPS[upTree + '.' + p[0]] || []).map(d => d.n).join(' · ')}</span></small>`, sl >= mk || me.cr < PORT_COST[sl] || inMission, pend ? 'warn' : ''); }).join('');
+      if (p) { const t = T.ports.find(x => x[0] === p[0]), lv = p[1], c = portUpCost(lv), u = p[2] || {}, opts = D.PORT_UPS[upTree + '.' + p[0]] || [D.PU_HP], eli = sl === 2, EP = eli ? D.ELITE.per : 1;
+        h += `<div class="nd own"><b>✔ ${eli ? 'Elite ' : ''}${t[1]}</b> · ${lv} upgrade level${lv === 1 ? '' : 's'} bought<small>${t[2]} <b>Next upgrade costs ${c}¢</b> (price rises with each level bought on this port).</small></div>`;
+        h += opts.map(d0 => { const d = eli ? Object.assign({}, d0, { per: d0.per * EP, max: d0.max + D.ELITE.maxLv }) : d0, l = u[d.o] || 0, full = l >= d.max; return btn(`data-pup="${sl}" data-opt="${d.o}"`, `▲ <b>${d.n}</b> · Lv ${l}/${d.max} ${full ? '(max)' : '· ' + c + '¢'}<small class="fxs"><span class="fxl">${d.d}</span><span class="fxl"><u>Now</u>: ${l ? D.puVal(d, l) : 'none'}${full ? '' : ' → ' + D.puVal(d, l + 1)}</span></small>`, full || me.cr < c || inMission); }).join(''); }
+      else h += T.ports.map(p => { const pend = portPending && portPending[0] === sl && portPending[1] === p[0]; return btn(`data-port="${sl}" data-id="${p[0]}"`, `<b>${pend ? '⚠ CLICK AGAIN: PERMANENT · ' : ''}${sl === 2 ? 'Elite ' : ''}${p[1]}</b> · ${PORT_COST[sl]}¢<small class="fxs"><span class="fxl">${p[2]}</span><span class="fxl"><u>Upgrades</u>: ${(D.PORT_UPS[upTree + '.' + p[0]] || []).map(d => d.n).join(' · ')}</span></small>`, sl >= mk || me.cr < PORT_COST[sl] || inMission, pend ? 'warn' : ''); }).join('');
       h += '</div>';
     }
     h += '</div>';
@@ -632,6 +648,7 @@ function renderUp() {
   $('upp').querySelectorAll('[data-pup]').forEach(b => b.onclick = () => { send({ t: 'buy', tree: upTree, kind: 'pup', slot: +b.dataset.pup, opt: b.dataset.opt }); SFX.coin(); });
   const mb = $('upp').querySelector('[data-mk]'); if (mb) mb.onclick = () => { send({ t: 'mk' }); SFX.core(); };
   const cb = $('upp').querySelector('[data-core]'); if (cb) cb.onclick = () => { send({ t: 'core' }); SFX.coin(); };
+  const ch_ = $('upp').querySelector('[data-corehull]'); if (ch_) ch_.onclick = () => { send({ t: 'core', hull: 1 }); SFX.core(); };
   $('rdy').onclick = () => { const r = lastSnap && lastSnap.rdy && lastSnap.rdy.includes(me.pid); send({ t: 'ready', v: r ? 0 : 1 }); SFX.ui(); };
 }
 function upFoot() {
@@ -644,10 +661,10 @@ function upFoot() {
 function renderMap(s) {
   $('maph').innerHTML = '★ STAR MAP · choose the next mission · <span class="y">' + Math.ceil(s.pt) + 's</span>';
   const hum = s.crew.filter(c => !c[1]).length;
-  $('mapsub').innerHTML = `Campaign: ${s.md} main missions cleared · ${MK_NAMES[s.mk]} · ${s.co} ◆ cores<br>Vote weight: <b class="y">Pilot ${s.pw}</b> (live players − 1) · everyone else 1 · ${hum} player${hum === 1 ? '' : 's'} aboard. Launches when all players vote or time runs out.`;
+  $('mapsub').innerHTML = `Campaign: ${s.md} main missions cleared · ${MK_NAMES[s.mk]} · ${s.co} ◆ Morph Metal<br>Vote weight: <b class="y">Pilot ${s.pw}</b> (live players − 1) · everyone else 1 · ${hum} player${hum === 1 ? '' : 's'} aboard. Launches when all players vote or time runs out.`;
   const key = s.opts.map(o => o.id).join() + '|' + JSON.stringify(s.votes) + s.my;
   if (renderMap.key === key) return; renderMap.key = key;
-  $('mcards').innerHTML = s.opts.map((o, i) => { const v = s.votes[o.id] || 0, M = MTYPES[o.type]; return `<div class="mc ${o.kind} ${s.my === o.id ? 'voted' : ''}" data-id="${o.id}"><canvas width="240" height="120" data-pl="${i}"></canvas><span class="${o.kind === 'main' ? 'y' : 'small'}">${o.kind === 'main' ? '★ MAIN MISSION' : '◇ SIDE MISSION'}</span> · <span class="d${o.diff}">${DIFFS[o.diff].n}</span> · Lv ${o.level}<b>${o.planet.name}</b><span class="c">${M.n}</span><br><span class="small">${M.d}${o.mod && o.mod !== 'none' ? ' · ☄ ' + o.mod : ''}</span><br><span class="small" style="color:${o.level > EFIRE_WEAK_LV ? '#f99' : '#9cf'}">${o.level > EFIRE_WEAK_LV ? '⚠ enemy fire: FULL strength' : 'enemy fire: -' + round((1 - EFIRE_WEAK) * 100) + '% (levels 1–' + EFIRE_WEAK_LV + ')'}</span><br><span class="small">Reward ×${DIFFS[o.diff].m}${o.diff >= 2 || o.kind === 'main' ? ' · +1 ◆ core' : ''}</span><br><span class="v">${v ? '▮'.repeat(min(v, 12)) + ' ' + v : ''}</span></div>`; }).join('');
+  $('mcards').innerHTML = s.opts.map((o, i) => { const v = s.votes[o.id] || 0, M = MTYPES[o.type]; return `<div class="mc ${o.kind} ${s.my === o.id ? 'voted' : ''}" data-id="${o.id}"><canvas width="240" height="120" data-pl="${i}"></canvas><span class="${o.kind === 'main' ? 'y' : 'small'}">${o.kind === 'main' ? '★ MAIN MISSION' : '◇ SIDE MISSION'}</span> · <span class="d${o.diff}">${DIFFS[o.diff].n}</span> · Lv ${o.level}<b>${o.title ? 'Ch.' + o.ch + ' · ' + o.title + ' — ' : ''}${o.planet.name}</b><span class="c">${M.n}</span><br><span class="small">${M.d}${o.mod && o.mod !== 'none' ? ' · ☄ ' + o.mod : ''}</span><br><span class="small" style="color:${o.level > EFIRE_WEAK_LV ? '#f99' : '#9cf'}">${o.level > EFIRE_WEAK_LV ? '⚠ enemy fire: FULL strength' : 'enemy fire: -' + round((1 - EFIRE_WEAK) * 100) + '% (levels 1–' + EFIRE_WEAK_LV + ')'}</span><br><span class="small">Reward ×${DIFFS[o.diff].m}${o.diff >= 2 || o.kind === 'main' ? ' · +1 ◆ core' : ''}</span><br><span class="v">${v ? '▮'.repeat(min(v, 12)) + ' ' + v : ''}</span></div>`; }).join('');
   $('mcards').querySelectorAll('canvas[data-pl]').forEach(c => { const o = s.opts[+c.dataset.pl], g = c.getContext('2d'); g.drawImage(neb, 0, 0, 240, 120); for (let i = 0; i < 30; i++) { g.fillStyle = '#fff'; g.fillRect((i * 97) % 240, (i * 53) % 120, 1, 1); } g.drawImage(planetCanvas(o.planet), 40, -22, 160, 160); });
   $('mcards').querySelectorAll('.mc').forEach(d => d.onclick = () => { send({ t: 'vote', id: d.dataset.id }); SFX.ui(); });
 }
@@ -657,6 +674,9 @@ function phaseChange(from, to, s) {
   if (from === 'upgrade' && to === 'map') $('upp').classList.add('hide');
   if (to === 'result' && s.res) setTimeout(() => { const r = s.res; banner((r.win ? 'MISSION COMPLETE' : 'SHIP LOST') + `<br><span style="font-size:.45em">${r.win ? `+${r.bonus} ¢ completion bonus${r.cores ? ' · +' + r.cores + ' ◆' : ''}` : 'Regroup, upgrade, try again'}</span>`, 2.6); }, 300);
   if (to === 'mission' && !$('upp').classList.contains('hide')) $('upp').classList.add('hide');
+  if (to === 'mission') chapterStart(s);
+  if (to === 'result') chapterEnd(s);
+  if (to !== 'mission') { $('comm').classList.add('hide'); commT = 0; }
 }
 // v5: the repair drone is a little starship with a short-range laser beam
 function drawDrone(d, T) {
@@ -685,7 +705,7 @@ function hudDom(s) {
     else if (M.type === 'passengers') obj = M.pax ? `Passengers aboard! Return to the start · ${round(max(0, sh.x - (M.sx + 420)))}px to go` : `Fly to the far end and pick up the passengers · ${round(max(0, M.px - 150 - sh.x))}px to go`;
     else if (M.type === 'escort') obj = `Freighters home ${M.got} · ${s.al.filter(a => a[1] === 'fr').length} en route`;
   }
-  $('mi').innerHTML = s.ph === 'mission' && M ? `<b>${M.planet.name}</b> · ${MTYPES[M.type].n}${M.ext ? ' <span class="y">★ EXTENDED</span>' : ''} · <span class="d${M.diff}">${DIFFS[M.diff].n}</span> Lv ${M.lv}<br>${obj}<br><span class="y">${me.cr} ¢</span> · <span class="c">${s.co} ◆</span> · ${MK_NAMES[s.mk]} · ship ${me.code}${me.pub ? ' (public)' : ''}`
+  $('mi').innerHTML = s.ph === 'mission' && M ? `<b>${M.ttl ? 'Ch.' + M.ch + ' · ' + M.ttl + ' — ' : ''}${M.planet.name}</b> · ${MTYPES[M.type].n}${M.ext ? ' <span class="y">★ EXTENDED</span>' : ''} · <span class="d${M.diff}">${DIFFS[M.diff].n}</span> Lv ${M.lv}<br>${obj}<br><span class="y">${me.cr} ¢</span> · <span class="c">${s.co} ◆</span> · ${MK_NAMES[s.mk]} · ship ${me.code}${me.pub ? ' (public)' : ''}`
     : `<b>${s.ph === 'map' ? 'STAR MAP' : s.ph === 'upgrade' ? 'UPGRADE BAY' : 'DEBRIEF'}</b> · <span class="y">${me.cr} ¢</span> · <span class="c">${s.co} ◆</span> · ship ${me.code}`;
   $('crew').innerHTML = s.crew.map((c, i) => crewLine(s, c, i)).join('');
   if (s.ph === 'map') renderMap(s);
@@ -697,7 +717,7 @@ function hudDom(s) {
   const myB = me.role >= 0 ? s.crew[me.role][6] : []; $('buffs').innerHTML = inM && myB.length ? myB.map(b => ({ cry: '⚔ Battle Cry', reroute: '⚡ Rerouted engine power', rhalf: '⚡ Split power', stim: '💉 Stim', over: '🔥 Overcharge', ovl: '⚡ Overload' }[b] || b)).join(' · ') : '';
 }
 // ----- live HUD pieces (v3) -----
-const HINTS = [[['Click', 'nose laser'], ['Aim', 'steer']], [['Click', 'fire turrets']], [['Click a port', 'start repair'], ['Click map', 'send drones'], ['G', 'recall drones: +50%']], [['↑/↓', 'throttle'], ['1-4 / Shift', 'power slots']], [['Aim', 'aim the arc'], ['Ship turns', 'arc stays put']], [['Click', 'fire turrets']]];
+const HINTS = [[['Click', 'nose laser'], ['Aim', 'steer']], [['Click', 'fire turrets']], [['Click a port', 'start repair'], ['Click map', 'send drones'], ['G', 'recall drones: +50%']], [['↑/↓', 'throttle'], ['1-4 / Shift', 'power slots']], [['Aim', 'aim the arc'], ['Click', 'ION BOLT: stuns 3s'], ['Ship turns', 'arc stays put']], [['Click', 'fire turrets']]];
 function crewLine(s, c, i) { const sh = s.sh, down = []; for (let k = 0; k < NSEC; k++) if (sh.dn[k] && secRole(k) === i) down.push(secShort(k)); return `<div class="${i === me.role ? 'me' : c[1] ? 'bot' : ''} ${down.length ? 'dn' : ''}">${RICON[i]} ${RSHORT[i]} ${c[1] ? '🤖' : '👤'} ${c[0]}${c[4] ? ' (idle·bot)' : ''}${c[3] ? ' 🔧' : ''}${down.length ? ' ✖ ' + down.join(', ') + ' DOWN' : ''}${c[6].length ? ' <span class="y">' + c[6].map(b => '⚡' + b).join(' ') + '</span>' : ''}</div>`; }
 function abilityBar(s) {
   const r = me.role, ab = s.crew[r][5], key = r + '|' + ab.map(a => a ? a[0] : '-').join();
@@ -937,7 +957,7 @@ let lastT = performance.now(), fps = 60, bgPlanet = null;
 function frame(now) {
   requestAnimationFrame(frame);
   const dt = min(0.05, (now - lastT) / 1000); lastT = now; fps = fps * 0.95 + (1 / max(dt, 0.001)) * 0.05;
-  cur = interp(); stepParts(dt);
+  cur = interp(); stepParts(dt); v7Frame(dt, cur);
   for (const [id, b] of bolts) { b.x += b.vx * dt; b.y += b.vy * dt; b.life -= dt; if (b.life <= 0) bolts.delete(id); }
   for (let i = floaters.length - 1; i >= 0; i--) { const f = floaters[i]; f.t -= dt; f.y -= 40 * dt; if (f.t <= 0) floaters.splice(i, 1); }
   if (bannerT > 0) { bannerT -= dt; $('banner').style.opacity = min(1, bannerT * 2); } else $('banner').style.opacity = 0;
@@ -988,7 +1008,7 @@ function drawWorld(o, T) {
   // enemies
   for (const e of o.e) drawEnemy(e, T, view);
   // ship
-  if (!sh.dead && s.ph !== 'result' || (s.ph === 'result' && !sh.dead)) drawShip(o, T);
+  if (!sh.dead && s.ph !== 'result' || (s.ph === 'result' && !sh.dead)) drawShip(o, T); v7Ship(o, T);
   // drones
   for (const d of o.dr) if (d) drawDrone(d, T);
   if (o.sh.dg) { const [gx, gy, gf] = o.sh.dg, rr = 26 + sin(T * 6) * 4; cx.strokeStyle = `rgba(120,240,255,${0.35 + 0.4 * gf})`; cx.lineWidth = 2.5; cx.setLineDash([7, 6]); cx.beginPath(); cx.arc(gx, gy, rr + 18, T * 1.5, T * 1.5 + TAU); cx.stroke(); cx.setLineDash([]); cx.beginPath(); cx.arc(gx, gy, rr, 0, TAU); cx.stroke(); cx.beginPath(); cx.moveTo(gx - 12, gy); cx.lineTo(gx + 12, gy); cx.moveTo(gx, gy - 12); cx.lineTo(gx, gy + 12); cx.stroke(); cx.fillStyle = '#8ef'; cx.font = 'bold 12px monospace'; cx.textAlign = 'center'; cx.fillText('DRONES HOLD', gx, gy - rr - 26); cx.fillStyle = 'rgba(0,0,0,.5)'; cx.fillRect(gx - 22, gy + rr + 24, 44, 4); cx.fillStyle = '#8ef'; cx.fillRect(gx - 22, gy + rr + 24, 44 * gf, 4); }
@@ -1003,6 +1023,7 @@ function drawWorld(o, T) {
       cx.strokeStyle = 'rgba(255,90,240,.35)'; cx.lineWidth = 14; cx.beginPath(); cx.moveTo(b.x - dx * 150, b.y - dy * 150); cx.lineTo(b.x + dx * 24, b.y + dy * 24); cx.stroke();
       cx.strokeStyle = '#ffb0f8'; cx.lineWidth = 6; cx.beginPath(); cx.moveTo(b.x - dx * 110, b.y - dy * 110); cx.lineTo(b.x + dx * 24, b.y + dy * 24); cx.stroke();
       cx.strokeStyle = '#fff'; cx.lineWidth = 2.4; cx.beginPath(); cx.moveTo(b.x - dx * 80, b.y - dy * 80); cx.lineTo(b.x + dx * 24, b.y + dy * 24); cx.stroke(); cx.lineCap = 'butt'; }
+    else if (b.kind === 6) drawIonBolt(b.x, b.y, a, 0.8);
     else if (b.kind === 3) streak(b.x, b.y, a, 22, 2.3, PORT_ORANGE, 13);   // port gunner: orange
     else streak(b.x, b.y, a, b.kind === 2 ? 26 : 22, 2.2, PLAYER_RED, 12); }
   drawPlayerShots(o);
@@ -1064,12 +1085,13 @@ function drawEnemy(e, T, view) {
     cx.strokeStyle = '#2a2d33'; cx.lineWidth = heavy ? 6 : 4; cx.beginPath(); cx.moveTo(px, py); cx.lineTo(px + cos(pa) * len, py + sin(pa) * len); cx.stroke();
     cx.fillStyle = P_.w === 'msl' ? '#8a8f6a' : P_.w === 'flak' ? '#8a7a6a' : '#7d838c'; cx.beginPath(); cx.arc(px, py, heavy ? 10 : 7.5, 0, TAU); cx.fill(); cx.strokeStyle = '#111'; cx.lineWidth = 1.5; cx.stroke();
     cx.strokeStyle = p[0] > 0.5 ? '#5f5' : p[0] > 0.25 ? '#fd4' : '#f44'; cx.lineWidth = 2.5; cx.beginPath(); cx.arc(px, py, heavy ? 13 : 10.5, -PI / 2, -PI / 2 + TAU * p[0]); cx.stroke();
-    if (p[2]) cx.drawImage(glow('#39ff4a', 26), px + cos(pa) * len - 26, py + sin(pa) * len - 26);
+    if (p[2]) cx.drawImage(glow(heavy ? '#4aa8ff' : '#39ff4a', heavy ? 40 : 26), px + cos(pa) * len - (heavy ? 40 : 26), py + sin(pa) * len - (heavy ? 40 : 26));
   });
   if (shf !== undefined && shf > 0) enemyShield(x, y, Tt.r * (big ? 1.05 : 1.5), shf, T);
   if (!big && hp < 1) hpBar(x, y - Tt.r - 10, Tt.r * 2, hp, '#5f5');
   if (!big && shf > 0) hpBar(x, y - Tt.r - 15, Tt.r * 2, shf, '#c9a0ff');
   if (big && shf > 0) hpBar(x, y - Tt.r - 22, min(160, Tt.r * 1.6), shf, '#c9a0ff');
+  v7EnemyFx(e, x, y, Tt, big);
   if (paint) { cx.strokeStyle = '#ff4040'; cx.lineWidth = 2; const r = Tt.r + 12; cx.save(); cx.translate(x, y); cx.rotate(T * 2); for (let i = 0; i < 4; i++) { cx.rotate(PI / 2); cx.beginPath(); cx.arc(0, 0, r, 0.2, 0.9); cx.stroke(); } cx.restore(); }
 }
 function drawShip(o, T) {
@@ -1097,7 +1119,7 @@ function drawShip(o, T) {
   if (sh.aeg) { cx.strokeStyle = 'rgba(255,215,80,.7)'; cx.lineWidth = 2; cx.setLineDash([8, 6]); cx.beginPath(); cx.arc(x, y, G.hr + 34, T, T + TAU); cx.stroke(); cx.setLineDash([]); }
   // engines
   const eg = sh.dn[ENG] ? 0.2 : clamp(sh.spd / 300, 0.2, 1.4) * (sh.burn ? 1.6 : 1);
-  for (const [lx, ly] of ENGN[mk]) { const [ex, ey] = L2W(lx - 2, ly), r = (10 + mk * 3) + eg * (14 + mk * 4) + random() * 3; cx.drawImage(glow(sh.burn ? '#ffd890' : mk === 2 ? '#7fe8ff' : mk === 1 ? '#ffc070' : '#8fd8ff', 32), ex - r, ey - r, r * 2, r * 2); if (eg > 0.4 && random() < 0.5) P({ k: 0, x: ex, y: ey, vx: -ca * 200 + (random() - .5) * 40, vy: -sa_ * 200 + (random() - .5) * 40, life: 0.25, max: 0.25, s: 2, c: '#9df' }); }
+  for (const [lx, ly] of ENGN[mk]) { const [ex, ey] = L2W(lx - 2, ly), r = (10 + mk * 3) + eg * (14 + mk * 4) + random() * 3; cx.drawImage(glow(sh.burn ? '#ffd890' : mk === 3 ? '#9fffd8' : mk === 2 ? '#7fe8ff' : mk === 1 ? '#ffc070' : '#8fd8ff', 32), ex - r, ey - r, r * 2, r * 2); if (eg > 0.4 && random() < 0.5) P({ k: 0, x: ex, y: ey, vx: -ca * 200 + (random() - .5) * 40, vy: -sa_ * 200 + (random() - .5) * 40, life: 0.25, max: 0.25, s: 2, c: '#9df' }); }
   const roll = sh.roll || 0; cx.save(); cx.translate(x, y); cx.rotate(a); cx.scale(1, 1 - abs(roll) * 0.5); cx.translate(-x, -y);
   blit(playerSprite(mk), x, y, 0, 1, sh.inv ? 0.55 : 1);
   // installed port hardware (drawn live)
@@ -1133,6 +1155,7 @@ function drawEnemyFire(o, view) {
     else if (b[4] === 1) { const a = b[3], tx = b[1] - cos(a) * 9, ty = b[2] - sin(a) * 9;
       cx.drawImage(glow(ENEMY_GREEN, 30), b[1] - 30, b[2] - 30); flame(tx, ty, a, 20, 4.2, '#39ff4a', '#eaffd8'); cx.drawImage(glow('#9dff6a', 14), tx - cos(a) * 8 - 14, ty - sin(a) * 8 - 14);
       missileBody(b[1], b[2], a, 15, 5.5, ENEMY_GREEN, '#caffc0'); if (random() < 0.7) P({ k: 3, x: tx - cos(a) * 10, y: ty - sin(a) * 10, vx: 0, vy: 0, life: 0.55, max: 0.55, s: 5, c: '#2f7a35' }); }
+    else if (b[4] === 3) drawIonBolt(b[1], b[2], b[3], 1);
     else { cx.drawImage(glow(ENEMY_GREEN, 14), b[1] - 14, b[2] - 14); cx.fillStyle = '#d8ffd0'; cx.beginPath(); cx.arc(b[1], b[2], 3, 0, TAU); cx.fill(); } }
 }
 function drawPlayerShots(o) {
@@ -1154,16 +1177,18 @@ function drawHUD(o, T) {
   if (s.mi && s.mi.type === 'passengers' && s.mi.pax) ind(s.mi.sx, 0, '#8f8', 12);
   if (s.mi && s.mi.type === 'escort') ind(s.mi.jx, s.mi.jy, '#9cf', 12);
   for (const p of o.pk) if (p[3]) ind(p[1], p[2], '#6df', 8);
-  const bw = min(230, W * 0.32), bx = 12, by = H - (isTouch ? 230 : 96);
+  v7Hud(o, T);
+  const bw = min(250, W * 0.34), bx = 12, by = H - (isTouch ? 238 : 106);
   cx.textAlign = 'left'; cx.font = 'bold 11px monospace';
-  { const g_ = cx.createLinearGradient(0, by - 22, 0, by + 86); g_.addColorStop(0, 'rgba(14,26,44,.62)'); g_.addColorStop(1, 'rgba(4,8,16,.5)'); cx.fillStyle = g_; cx.fillRect(bx - 8, by - 22, bw + 16, 110); cx.strokeStyle = 'rgba(110,170,230,.45)'; cx.lineWidth = 1; cx.strokeRect(bx - 7.5, by - 21.5, bw + 15, 109); cx.fillStyle = 'rgba(110,170,230,.8)'; for (const [qx, qy] of [[bx - 8, by - 22], [bx + bw + 8, by - 22], [bx - 8, by + 88], [bx + bw + 8, by + 88]]) cx.fillRect(qx - 2, qy - 2, 4, 4); }
-  cx.fillStyle = '#cde'; cx.fillText(`HULL ${sh.h.toFixed(1)}/${sh.hm}`, bx, by - 4);
-  hudBar(bx, by, bw, 10, sh.h / sh.hm, sh.h / sh.hm < 0.35 ? '#f44' : '#8ff', 'rgba(0,30,40,.75)');
+  { const g_ = cx.createLinearGradient(0, by - 22, 0, by + 86); g_.addColorStop(0, 'rgba(14,26,44,.62)'); g_.addColorStop(1, 'rgba(4,8,16,.5)'); cx.fillStyle = g_; cx.fillRect(bx - 8, by - 24, bw + 16, 128); cx.strokeStyle = 'rgba(110,170,230,.45)'; cx.lineWidth = 1; cx.strokeRect(bx - 7.5, by - 23.5, bw + 15, 127); cx.fillStyle = 'rgba(110,170,230,.8)'; for (const [qx, qy] of [[bx - 8, by - 22], [bx + bw + 8, by - 22], [bx - 8, by + 88], [bx + bw + 8, by + 88]]) cx.fillRect(qx - 2, qy - 2, 4, 4); }
+  { const hf_ = sh.h / sh.hm, crit_ = hf_ <= 0.1 && !sh.dead, fl_ = crit_ && (T * 5 | 0) % 2; cx.font = 'bold 14px monospace'; cx.fillStyle = crit_ ? (fl_ ? '#fff' : '#f44') : hf_ < 0.5 ? '#fc8' : '#cde'; cx.fillText(`HULL ${sh.h.toFixed(1)}/${sh.hm}${crit_ ? '  ⚠ CRITICAL' : ''}`, bx, by - 5);
+    hudBar(bx, by, bw, 18, hf_, crit_ ? (fl_ ? '#ff8a8a' : '#f22') : hf_ < 0.35 ? '#f44' : hf_ < 0.5 ? '#fb4' : '#8ff', 'rgba(0,30,40,.75)'); cx.fillStyle = 'rgba(255,255,255,.55)'; cx.fillRect(bx + bw * 0.5 - 0.5, by - 2, 1, 22); cx.fillStyle = 'rgba(255,90,90,.8)'; cx.fillRect(bx + bw * 0.1 - 0.5, by - 2, 1, 22); cx.font = 'bold 11px monospace'; }
   const down = sh.shd > 0 || sh.shp <= 0;
-  cx.fillStyle = down ? '#f88' : '#7ab8ff'; cx.fillText(down ? `SHIELD DOWN · ${Math.ceil(sh.shd)}s` : `SHIELD ${sh.shp.toFixed(1)}/${sh.shm.toFixed(1)} · ${sh.arc}° arc`, bx, by + 20);
-  hudBar(bx, by + 24, bw, 10, down ? 1 - sh.shd / 20 : clamp(sh.shp / sh.shm, 0, 1), down ? '#a44' : '#4aa8ff', 'rgba(0,20,50,.75)');
-  cx.fillStyle = sh.lk > 0 ? '#ff6a6a' : '#ffd54a'; cx.fillText(sh.lk > 0 ? `POWER DEPLETED · back in ${Math.ceil(sh.lk)}s · 25% thrust` : `POWER ${sh.en}/${sh.em}${sh.eu ? ' · ' + sh.eu + '/10 slots' : ''}`, bx, by + 48); hudBar(bx, by + 52, bw, 8, sh.en / sh.em, '#ffd54a', 'rgba(40,40,0,.75)');
-  cx.fillStyle = '#9ab'; cx.fillText(isTouch ? `SPD ${sh.spd}` : `SPD ${sh.spd} · THR ${round(sh.thr * 100)}% · RR E${sh.pip[0]} W${sh.pip[1]} S${sh.pip[2]} R${sh.pip[3]}`, bx, by + 76);
+  cx.fillStyle = down ? '#f88' : '#7ab8ff'; cx.fillText(down ? `SHIELD DOWN · ${Math.ceil(sh.shd)}s` : `SHIELD ${sh.shp.toFixed(1)}/${sh.shm.toFixed(1)} · ${sh.arc}° arc`, bx, by + 34);
+  hudBar(bx, by + 38, bw, 10, down ? 1 - sh.shd / 20 : clamp(sh.shp / sh.shm, 0, 1), down ? '#a44' : '#4aa8ff', 'rgba(0,20,50,.75)');
+  cx.fillStyle = sh.lk > 0 ? '#ff6a6a' : '#ffd54a'; cx.fillText(sh.lk > 0 ? `POWER DEPLETED · back in ${Math.ceil(sh.lk)}s · 25% thrust` : `POWER ${sh.en}/${sh.em}${sh.eu ? ' · ' + sh.eu + '/10 slots' : ''}`, bx, by + 62); hudBar(bx, by + 66, bw, 8, sh.en / sh.em, '#ffd54a', 'rgba(40,40,0,.75)');
+  cx.fillStyle = '#9ab'; cx.fillText(isTouch ? `SPD ${sh.spd}` : `SPD ${sh.spd} · THR ${round(sh.thr * 100)}% · RR E${sh.pip[0]} W${sh.pip[1]} S${sh.pip[2]} R${sh.pip[3]}`, bx, by + 90);
+  if (me.role === SHIELD) { const rd = sh.ic <= 0.001; cx.fillStyle = rd ? '#7fd0ff' : '#789'; cx.fillText(rd ? '⚡ ION BOLT READY · click (costs ' + D.ION_COST + ' shield)' : '⚡ ion bolt ' + round((1 - sh.ic) * 100) + '%', bx, by + 104); }
   // ship schematic: every section, extra ports included
   const scx = W - 74, scy = isTouch ? 300 : 124, G = GEO[s.mk], K_ = 0.6;
   cx.fillStyle = 'rgba(5,10,20,.6)'; cx.beginPath(); cx.arc(scx, scy, 62, 0, TAU); cx.fill();
@@ -1176,6 +1201,130 @@ function drawHUD(o, T) {
   if (warn.length) { cx.textAlign = 'center'; cx.font = 'bold 14px monospace'; cx.fillStyle = (T * 3 | 0) % 2 ? '#f55' : '#fa5'; warn.forEach((w, i) => cx.fillText('⚠ ' + w, W / 2, (isTouch ? 170 : 96) + i * 18)); }
   cx.fillStyle = '#456'; cx.font = '10px monospace'; cx.textAlign = 'right'; cx.fillText(round(fps) + 'fps', W - 6, H - 4);
 }
+
+// ================= v7: story, roster, comms, voice, alarm, ion/stun visuals =================
+const ST = window.STORY, FINN = ST.CREW[REPAIR];
+const portraitSrc = id => 'img/' + id + '.webp';
+function faceHtml(w, size) { return w.img ? `<img src="${portraitSrc(w.img)}" alt="" width="${size}" height="${size}">` : `<div style="width:${size}px;height:${size}px;display:grid;place-items:center;font-size:${size * 0.5}px;border:2px solid ${w.col};border-radius:8px;background:#0a1410;flex:none">${w.id === 'cmd' || w.name === 'Command' ? '★' : '🐊'}</div>`; }
+// ----- roster (opening page) -----
+(function buildRoster() {
+  const order = [PILOT, GUNL, GUNR, SHIELD, ENG, REPAIR];
+  $('roster').innerHTML = order.map(i => { const c = ST.CREW[i]; return `<div class="rc" data-r="${i}" style="--c:${c.col}"><img src="${portraitSrc(c.img)}" alt="${c.name}" width="78" height="78"><div class="t"><b>${c.name}</b><em>${c.role} · ${c.animal} · ${c.sex === 'F' ? '♀' : '♂'}</em>${c.blurb}</div></div>`; }).join('');
+  $('roster').querySelectorAll('.rc').forEach(d => d.onclick = () => { const b = pr.querySelector(`[data-r="${d.dataset.r}"]`); if (b) b.click(); $('roster').querySelectorAll('.rc').forEach(x => x.classList.toggle('sel', x === d)); });
+  pr.querySelectorAll('button').forEach(b => { const o = b.onclick; b.onclick = e => { o(e); $('roster').querySelectorAll('.rc').forEach(x => x.classList.toggle('sel', x.dataset.r === b.dataset.r)); }; });
+  const cr = ST.CMDRS.map(c => `<img src="${portraitSrc(c.img)}" title="${c.name}, ${c.title}" alt="${c.name}">`).join('');
+  $('races').innerHTML =
+    `<div class="rc big" style="--c:#ff7a5a"><div class="t"><b>${ST.RACES.vorrakh.name}</b><em>enemy · anthropomorphic crocodiles</em><div class="rcr">${cr}</div><span>${ST.RACES.vorrakh.blurb} Commanders: ${ST.CMDRS.map(c => c.name).join(', ')}.</span></div></div>` +
+    `<div class="rc big" style="--c:#c9a0ff"><div class="t"><b>${ST.RACES.mireth.name}</b><em>friendly natives · anthropomorphic cats</em><div class="rcr"><img src="${portraitSrc('ishkara')}" title="Ishkara" alt="Ishkara"><img src="${portraitSrc('tavi')}" title="Tavi" alt="Tavi"></div><span>${ST.RACES.mireth.blurb} Meet Ishkara the Star-Weaver and Tavi the scout.</span></div></div>` +
+    `<div class="rc big" style="--c:#4dffb0"><img src="${portraitSrc('szarkath')}" alt="Szarkath" width="64" height="64"><div class="t"><b>${ST.VILLAIN.name}</b><em>the final boss</em><span>Ten thousand years asleep, and he still talks too much. He taunts you from the dark, sends his fleets after you, and waits at the Hollow Gate.</span></div></div>`;
+})();
+// ----- dialogue panels: never block play. Click = next line, Skip / Esc = close. Auto-advances. -----
+const dlg = { q: [], i: 0, t: 0, dur: 4, on: 0, head: '' };
+function dlgShow() {
+  const l = dlg.q[dlg.i], w = ST.WHO[l[0]] || ST.WHO.cmd, el = $('dlg');
+  el.style.setProperty('--c', w.col); el.classList.remove('hide');
+  el.innerHTML = faceHtml(Object.assign({ id: l[0] }, w), 84) + `<div style="flex:1;min-width:0"><div class="ch">${dlg.head} · ${dlg.i + 1}/${dlg.q.length}</div><div class="dn">${w.name}</div><div class="dt">${l[1]}</div><div class="dh"><span>click: next · Esc: skip · the game keeps running</span><button id="dskip">Skip ▶▶</button></div></div>`;
+  $('dskip').onclick = e => { e.stopPropagation(); dlgEnd(); };
+  dlg.t = 0; dlg.dur = Math.max(3.6, l[1].length * 0.055); tone(1500, 0.05, 'square', 0.03); tone(1100, 0.06, 'square', 0.03, null, null, 0.07);
+}
+function dlgStart(lines, head) { if (!lines || !lines.length || dlg.on) return; dlg.q = lines; dlg.i = 0; dlg.on = 1; dlg.head = head; dlgShow(); }
+function dlgNext() { dlg.i++; if (dlg.i >= dlg.q.length) dlgEnd(); else dlgShow(); }
+function dlgEnd() { dlg.on = 0; $('dlg').classList.add('hide'); }
+$('dlg').onclick = () => dlgNext();
+window.addEventListener('keydown', e => { if (e.key === 'Escape' && dlg.on) dlgEnd(); });
+function chapterStart(s) { const M = s.mi; if (M && M.pre && M.ch) { const C = ST.CHAPTERS[M.ch]; dlgStart(C.pre, 'Chapter ' + M.ch + ' · ' + C.title); } }
+function chapterEnd(s) { const r = s.res; if (r && r.win && r.ch) { const C = ST.CHAPTERS[r.ch]; dlgStart(C.post.concat(r.ch === 12 ? ST.EPILOGUE : []), 'Chapter ' + r.ch + ' complete · ' + C.title); } }
+// ----- in-mission comm popups -----
+let commT = 0;
+function commShow(who, text, tag) {
+  const w = ST.WHO[who] || (typeof who === 'object' ? who : ST.WHO.cmd), el = $('comm'); w.id = w.id || who;
+  el.style.setProperty('--c', w.col); el.innerHTML = faceHtml(w, 58) + `<div style="flex:1"><div class="cs">${tag || 'INCOMING TRANSMISSION'}</div><div class="cn">${w.name}</div><div class="ct">${text}</div></div>`;
+  el.classList.remove('hide'); el.style.animation = 'none'; void el.offsetWidth; el.style.animation = ''; commT = 5.4;
+  tone(1700, 0.05, 'square', 0.035); tone(1250, 0.05, 'square', 0.035, null, null, 0.07);
+}
+const cmdWho = i => i === 99 ? Object.assign({ id: 'szarkath' }, ST.VILLAIN, { col: ST.VILLAIN.col }) : (ci => ci ? { id: ci.id, name: ci.name, img: ci.img, col: '#ff7a5a' } : ST.WHO.cmd)(ST.cmdInfo(i));
+function v7Event(e, s) {
+  const k = e[0];
+  if (k === 'comm') {
+    if (e[1] === 'v') { const t = e[3] ? ST.SENDS[e[2] % ST.SENDS.length] : ST.TAUNTS[e[2] % ST.TAUNTS.length]; commShow('szarkath', t, e[3] ? 'VILLAIN · REINFORCEMENTS INBOUND' : 'VILLAIN TRANSMISSION'); }
+    else if (e[1] === 'c') { const l = e[3] ? ['tavi', 'Care package dropped! Hull patched and a few shiny things for you. Mireth always pay.'] : ST.CAT_COMMS[e[2] % ST.CAT_COMMS.length]; commShow(l[0], l[1], 'MIRETH ALLIES'); if (e[3]) { SFX.core(); toast('🐾 Mireth care package: hull repaired + credits', '#c9a0ff'); } }
+    return 1; }
+  if (k === 'cmd') {
+    const w = cmdWho(e[1]);
+    if (e[2] === 0) { commShow(w, e[1] === 99 ? ST.BOSS_LINES.open : ST.CMD_INTRO[(e[3] || 0) % ST.CMD_INTRO.length], e[1] === 99 ? 'FINAL BOSS' : 'COMMANDER ' + (w.name || '').toUpperCase()); toast('☠ ' + w.name + ' commands this ship', '#ff7a5a'); }
+    else if (e[2] === 2) { commShow(w, e[1] === 99 ? ST.BOSS_LINES.kill : ST.CMD_DEATH[(e[3] || 0) % ST.CMD_DEATH.length], e[1] === 99 ? 'THE DROWNED KING FALLS' : 'COMMANDER DOWN'); banner('☠ ' + w.name.toUpperCase() + ' ELIMINATED', 2.2); SFX.core(); }
+    return 1; }
+  if (k === 'boss') { commShow('szarkath', e[1] === 2 ? ST.BOSS_LINES.p2 : ST.BOSS_LINES.p3, 'FINAL BOSS · PHASE ' + e[1]); banner(e[1] === 2 ? 'THE TIDE RISES' : 'THE KING IS FURIOUS', 2.4); shake = max(shake, 14); return 1; }
+  if (k === 'ion') { const kind = e[4]; sparks(e[1], e[2], 22, '#6fb8ff', 300, 0.6, 2); sparks(e[1], e[2], 8, '#ffffff', 200, 0.3, 2); P({ k: 5, x: e[1], y: e[2], life: 0.4, max: 0.4, s: 110, c: '#3a8cff' }); SFX.stun(); if (kind === 2) { shake = max(shake, 16); flash = 0.45; flashC = '#38f'; toast('⚡ ION HIT: the ship is STUNNED for ' + D.ION_STUN + 's', '#7fd0ff'); } return 1; }
+  if (k === 'ionb') { sparks(e[1], e[2], 16, '#6fb8ff', 220, 0.5, 2); SFX.stun(); return 1; }
+  if (k === 'ionf') { sparks(e[1], e[2], 8, '#7fd0ff', 160, 0.3, 2); SFX.ionf(); return 1; }
+  if (k === 'hc') { toast('♥ Morph Metal bonded to the hull: +' + D.HULL_PER_METAL + ' max hull', '#6f6'); SFX.core(); return 1; }
+  if (k === 'sd' && s.ph === 'mission') { const kk = e[1], nm = kk < 6 ? PORT_NAMES[kk] : RNAME[D.secRole(kk)] + ' ' + (D.secSlot(kk) === 2 ? 'elite ' : '') + ((portInfo(D.secRole(kk), D.secSlot(kk)) || { name: 'port' }).name); finnSay(ST.FINN_LINES.port[0].replace('{}', nm), ST.FINN_LINES.port[1].replace('{}', nm), 0); return 0; }
+  return 0;
+}
+SFX.stun = function () { if (!gate('stun', 120)) return; tone(1400, 0.3, 'sawtooth', 0.08, 120); noise(0.3, 0.12, 4000, 400, 'bandpass'); tone(90, 0.4, 'square', 0.07, 40); };
+SFX.ionf = function () { if (!gate('ionf', 120)) return; tone(300, 0.35, 'sawtooth', 0.09, 1400); tone(1900, 0.18, 'sine', 0.04, 500); };
+// ----- Finn's voice announcements (Web Speech API) + comm beep, rate-limited; every client reads the same snapshot so everyone hears them -----
+let voiceLast = 0, voicePick = null, halfFlag = 0, lowFlag = 0;
+function pickVoice() {
+  if (voicePick || !window.speechSynthesis) return voicePick; const vs = speechSynthesis.getVoices(); if (!vs.length) return null;
+  const en = vs.filter(v => /^en/i.test(v.lang)); voicePick = en.find(v => /(daniel|alex|david|fred|george|ryan|guy|mark|male)/i.test(v.name) && !/female/i.test(v.name)) || en[0] || vs[0]; return voicePick;
+}
+if (window.speechSynthesis) { try { speechSynthesis.onvoiceschanged = () => { voicePick = null; pickVoice(); }; } catch (e) { } }
+function finnSay(spoken, shown, urgent) {
+  const now = performance.now(); if (now - voiceLast < (urgent ? 3000 : 7500)) return; voiceLast = now;
+  tone(1560, 0.06, 'square', 0.05); tone(1040, 0.08, 'square', 0.05, null, null, 0.09);
+  commShow('finn', shown, 'REPAIR · FINN HALLORAN');
+  if (A.muted || !window.speechSynthesis || window.__noVoice) return;
+  try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance('Finn, repair. ' + spoken), v = pickVoice(); if (v) u.voice = v; u.pitch = 0.78; u.rate = 1.06; u.volume = 0.95; u.lang = v ? v.lang : 'en-US'; setTimeout(() => speechSynthesis.speak(u), 140); } catch (e) { }
+}
+// ----- ship alarm below 10% hull (everybody hears it until the hull is back above 10% or the ship is destroyed) -----
+let alarmT = 0;
+function v7Frame(dt, o) {
+  if (commT > 0) { commT -= dt; if (commT <= 0) $('comm').classList.add('hide'); }
+  if (dlg.on) { dlg.t += dt; if (dlg.t > dlg.dur) dlgNext(); }
+  const s = lastSnap; if (!s || !o) return; const sh = s.sh, inM = s.ph === 'mission', fr = sh.h / sh.hm;
+  const low = inM && fr <= 0.1 && !sh.dead; $('alarmbar').classList.toggle('hide', !low);
+  if (low) { alarmT -= dt; if (alarmT <= 0) { alarmT = 1.0; tone(880, 0.42, 'sawtooth', 0.075, 600); tone(640, 0.42, 'square', 0.045, 440, null, 0.44); } if (!lowFlag) { lowFlag = 1; finnSay(ST.FINN_LINES.low[0], ST.FINN_LINES.low[1], 1); } } else { alarmT = 0; if (fr > 0.12) lowFlag = 0; }
+  if (inM && !sh.dead) { if (fr < 0.5 && fr > 0.1 && !halfFlag) { halfFlag = 1; finnSay(ST.FINN_LINES.half[0], ST.FINN_LINES.half[1], 1); } if (fr > 0.58) halfFlag = 0; } else if (!inM) { halfFlag = 0; lowFlag = 0; }
+  const stn = inM && sh.st > 0 && !sh.dead; $('stun').classList.toggle('hide', !stn); $('stuntxt').classList.toggle('hide', !stn); if (stn) $('stuntxt').firstChild.nodeValue = '⚡ STUNNED ' + sh.st.toFixed(1) + 's';
+}
+// ----- drawing: stun arcs, commander names, ion bolts, boss bar -----
+function stunArcs(x, y, r) {
+  cx.save(); cx.globalCompositeOperation = 'lighter'; cx.strokeStyle = 'rgba(120,190,255,.9)'; cx.lineWidth = 2 / Z; cx.shadowColor = '#4af'; cx.shadowBlur = 12;
+  for (let k = 0; k < 5; k++) { const a0 = random() * TAU, a1 = a0 + 0.5 + random() * 0.7; cx.beginPath(); let px = x + cos(a0) * r, py = y + sin(a0) * r; cx.moveTo(px, py);
+    for (let q = 1; q <= 5; q++) { const aa = a0 + (a1 - a0) * q / 5, rr = r * (0.92 + random() * 0.22); cx.lineTo(x + cos(aa) * rr, y + sin(aa) * rr); } cx.stroke(); }
+  cx.globalAlpha = 0.18 + 0.1 * sin(performance.now() / 70); cx.fillStyle = '#4af'; cx.beginPath(); cx.arc(x, y, r, 0, TAU); cx.fill(); cx.restore();
+}
+function v7EnemyFx(e, x, y, Tt, big) {
+  if (e[11] > 0) { stunArcs(x, y, Tt.r * (big ? 0.55 : 1.15)); cx.save(); cx.translate(x, y - Tt.r - (big ? 52 : 30)); cx.scale(1 / Z, 1 / Z); cx.fillStyle = '#9cf'; cx.font = 'bold 13px monospace'; cx.textAlign = 'center'; cx.fillText('⚡ STUNNED ' + e[11].toFixed(1) + 's', 0, 0); cx.restore(); }
+  if (e[12]) { const w = cmdWho(e[12]); cx.save(); cx.translate(x, y - Tt.r - (big ? 40 : 18) - (e[11] > 0 ? 18 : 0)); cx.scale(1 / Z, 1 / Z); cx.font = 'bold ' + (e[12] === 99 ? 15 : 12) + 'px monospace'; cx.textAlign = 'center'; cx.lineWidth = 3; cx.strokeStyle = 'rgba(0,0,0,.85)'; const txt = (e[12] === 99 ? '👑 ' : '☠ ') + w.name; cx.strokeText(txt, 0, 0); cx.fillStyle = e[12] === 99 ? '#4dffb0' : '#ff9a7a'; cx.fillText(txt, 0, 0); cx.restore(); }
+}
+function v7Ship(o, T) { const sh = o.sh; if (sh.st > 0 && !sh.dead) { const [x, y] = [o.x, o.y]; stunArcs(x, y, GEO[o.s.mk].hr * 1.25); stunArcs(x, y, GEO[o.s.mk].hr * 0.9); } }
+function drawIonBolt(x, y, a, scale) {
+  cx.drawImage(glow('#3a8cff', 54 * scale), x - 54 * scale, y - 54 * scale, 108 * scale, 108 * scale); streak(x, y, a, 58 * scale, 6 * scale, '#6fb8ff', 30 * scale);
+  cx.save(); cx.globalCompositeOperation = 'lighter'; cx.strokeStyle = 'rgba(190,225,255,.9)'; cx.lineWidth = 1.4; cx.beginPath(); cx.moveTo(x, y);
+  for (let q = 1; q <= 4; q++) { const bx = x - cos(a) * q * 12 * scale + (random() - 0.5) * 14 * scale, by = y - sin(a) * q * 12 * scale + (random() - 0.5) * 14 * scale; cx.lineTo(bx, by); } cx.stroke();
+  cx.fillStyle = '#fff'; cx.beginPath(); cx.arc(x, y, 4.5 * scale, 0, TAU); cx.fill(); cx.restore();
+}
+function v7Hud(o, T) {
+  const s = o.s; if (s.ph !== 'mission') return; const bo = o.e.find(e => e[1] === 19); if (!bo) return;
+  const ports = bo[8] || [], alive = ports.filter(p => p[0] > 0).length, tot = ports.length || 1, shf = bo[9], bw = min(460, W * 0.5), bx = W / 2 - bw / 2, by = isTouch ? 8 : 40;
+  cx.save(); cx.fillStyle = 'rgba(0,16,10,.7)'; cx.fillRect(bx - 8, by - 6, bw + 16, 52); cx.strokeStyle = '#4dffb0'; cx.strokeRect(bx - 7.5, by - 5.5, bw + 15, 51);
+  cx.fillStyle = '#4dffb0'; cx.font = 'bold 13px monospace'; cx.textAlign = 'center'; cx.fillText('👑 SZARKATH · THE DROWNED THRONE · hard-points ' + alive + '/' + tot, W / 2, by + 9);
+  hudBar(bx, by + 16, bw, 12, alive / tot, '#4dffb0', 'rgba(0,30,20,.8)'); if (shf > 0) hudBar(bx, by + 32, bw, 8, shf, '#c9a0ff', 'rgba(30,0,50,.8)'); cx.restore();
+}
+ESPR.overlord = (g, R) => {
+  shipBody(g, R, [[250, 0], [-190, -150], [-190, 150]], 260, '#43585f', '#08121a');
+  shipBody(g, R, mirror([[214, 0], [92, -26], [-92, -84], [-172, -92], [-178, 0]]), 180, '#557078', '#0e1a22');
+  shipBody(g, R, mirror([[130, 0], [40, -20], [-120, -54], [-160, -54], [-160, 0]]), 120, '#2e4048', '#08121a');
+  for (const s of [-1, 1]) for (let k = 0; k < 5; k++) { const x0 = -60 - k * 24; g.fillStyle = '#1a2a30'; g.beginPath(); g.moveTo(x0, 70 * s + k * 10 * s); g.lineTo(x0 - 18, 130 * s + k * 6 * s); g.lineTo(x0 - 30, 78 * s + k * 10 * s); g.closePath(); g.fill(); g.strokeStyle = '#4dffb0'; g.lineWidth = 1; g.stroke(); }
+  g.strokeStyle = '#4dffb0'; g.lineWidth = 2.4; g.beginPath(); g.moveTo(246, 0); g.lineTo(-186, 0); g.stroke(); g.lineWidth = 1.2; for (const y of [-30, 30, -70, 70]) { g.beginPath(); g.moveTo(190, y * 0.1); g.lineTo(-170, y); g.stroke(); }
+  const cg = g.createRadialGradient(-30, 0, 2, -30, 0, 34); cg.addColorStop(0, '#eafff4'); cg.addColorStop(0.35, '#4dffb0'); cg.addColorStop(1, 'rgba(10,60,40,0)'); g.fillStyle = cg; g.beginPath(); g.arc(-30, 0, 34, 0, TAU); g.fill();
+  g.fillStyle = '#d6b85a'; for (const s of [-1, 1]) { g.beginPath(); g.moveTo(236, 6 * s); g.lineTo(272, 14 * s); g.lineTo(240, 20 * s); g.closePath(); g.fill(); }
+  for (const y of [-60, -30, 0, 30, 60]) { g.fillStyle = '#071014'; g.fillRect(-192, y - 7, 6, 14); g.fillStyle = '#4dffb0'; g.fillRect(-196, y - 3, 4, 6); }
+};
+ESIZE.overlord = [580, 400];
 
 window.TSS = { worldToScreen(x, y) { return [(x - camX) * Z + W / 2, (y - camY) * Z + H / 2]; }, planet: planetCanvas, PK, send, get snap() { return lastSnap; }, get bolts() { return bolts; }, get cur() { return cur; }, me, get camZ() { return Z; }, setZ(v) { Z = v; }, setUp(t) { upTree = t; renderUp(); } };
 })();
