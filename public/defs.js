@@ -1,7 +1,7 @@
-// Team Space Ship v6: shared game data for the server (require) and the client (window.DEFS)
+// Spacebelts Optional v7: shared game data for the server (require) and the client (window.DEFS)
 (function (root) {
 const PI = Math.PI;
-const VERSION = 6;
+const VERSION = 7;
 const ARENA = 4200;                       // half-size of the mission map (v4: was 3200)
 const EFIRE_WEAK_LV = 5, EFIRE_WEAK = 0.6; // enemy fire does 60% damage on mission levels 1-5, full from level 6
 const REPAIR_CFG = { base: 20, drone: 1.5, mgMax: 1.0, clickDiv: 300, botCps: 1.5 }; // repair: base seconds per section, drone-off speed multiplier, minigame max bonus, click strength on the Repair Bay
@@ -10,6 +10,7 @@ const MONEY_MULT = 1.1;                   // v5: about 10% more credits for ever
 const RR_CFG = { max: 10, base: 2.0, drain: [0, 1, 1.14, 1.35, 1.65, 2.05, 2.6, 3.3, 4.2, 5.4, 7.0], regenCap: 3.0, lock: 20, lockThr: 0.25,
   eng: 0.015, acc: 0.08, wpn: 0.05, shd: 0.10, rep: 0.03, shHp: 0.10, shDr: 0.035 };   // v6: steeper drain curve (10 slots = 14/s). shd = recharge speed per slot; shHp = +max shield HP per slot; shDr = shield damage reduction per slot    // per slot: top speed, throttle response, gun fire rate, shield recharge speed, repair speed
 const RR_NAMES = ['ENGINES', 'WEAPONS', 'SHIELDS', 'REPAIR'];
+const ION_STUN = 3, ION_COST = 1.5, ION_CD = 7;   // v7: stun seconds; shield-player ion bolt: shield HP it costs, cooldown
 const BOMB_CFG = { cd: 12, rad: 150, dmg: 10 };
 const ROLES = ['pilot', 'gunR', 'repair', 'engineer', 'shield', 'gunL'];
 const RNAME = ['PILOT', 'STARBOARD GUNNER', 'REPAIR / DRONE', 'ENGINEER', 'SHIELDS', 'PORT GUNNER'];
@@ -20,12 +21,14 @@ const TREE_OF = ['pilot', 'gun', 'repair', 'engineer', 'shield', 'gun'];
 // ---------- economy (v3: progression over many missions) ----------
 const NODE_COST = [60, 120, 220, 360, 560];          // pyramid row 1..5
 const infCost = lv => 25 + 12 * lv;                   // limitless small upgrades
-const PORT_COST = [250, 400];                         // install a port in slot 1 (Mk II) / slot 2 (Mk III)
+const PORT_COST = [250, 400, 750];                         // install a port in slot 1 (Mk II) / slot 2 (Mk III) / slot 3 (Mk IV, Elite)
 const portUpCost = lv => 60 + 40 * lv;                // per-port upgrades: lv = total upgrade levels already bought on that port
 const PORT_MAX_LV = 5;                                // v6: max level of EACH port upgrade option
-const MK_COST = [0, 10, 22];                          // crew cores
-const MK_NAMES = ['Mk I Corvette', 'Mk II Gunship', 'Mk III Battlecruiser'];
-const CORE_RATE = 15;                                 // after Mk III: 1 core -> 15 credits for every crew member
+const MK_COST = [0, 10, 22, 45];                      // Morph Metal (v7: Mk IV costs 45)
+const MK_NAMES = ['Mk I Chimera Corvette', 'Mk II Gunship', 'Mk III Battlecruiser', 'Mk IV Leviathan'];
+const HULL_PER_METAL = 1;                             // v7: after Mk IV each spare Morph Metal can be spent on +1 max hull (= 0.25 of a 4-hull-point 'section hit')
+const ELITE = { eff: 1.6, per: 1.5, maxLv: 2, secHp: 1.5 };   // v7: the 4th (Mk IV) port is an Elite version: 1.6x effect, upgrades 1.5x stronger, +2 max levels, +1.5 section HP
+const CORE_RATE = 15;                                 // after Mk IV: sell 1 Morph Metal -> 15 credits for every crew member (or spend it on +1 max hull)
 const SHIELD_ARC0 = 15, SHIELD_ARC_MAX = 90, SHIELD_DOWN = 20;
 
 // ---------- ship geometry per Mk (local coords, nose = +x, starboard = +y) ----------
@@ -36,9 +39,14 @@ const GEO = [
     po: [[[32, 0]], [[-2, 42]], [[-42, 32]], [[-70, 0]], [[-42, -32]], [[-2, -42]]] },
   { hr: 52, sr: 114, len: 180, scale: 1, st: [[74, 0], [22, 30], [-28, 26], [-66, 0], [-28, -26], [22, -30]],
     po: [[[52, 0], [34, 0]], [[-4, 50], [40, 46]], [[-50, 40], [-72, 34]], [[-90, 16], [-90, -16]], [[-50, -40], [-72, -34]], [[-4, -50], [40, -46]]] },
+  { hr: 62, sr: 138, len: 250, scale: 1, st: [[96, 0], [30, 38], [-34, 34], [-86, 0], [-34, -34], [30, -38]],
+    po: [[[70, 0], [50, 0], [30, 0]], [[-4, 62], [52, 58], [24, 70]], [[-60, 50], [-90, 44], [-74, 62]], [[-112, 20], [-112, -20], [-124, 0]], [[-60, -50], [-90, -44], [-74, -62]], [[-4, -62], [52, -58], [24, -70]]] },
 ];
-// section index: 0..5 = stations, 6 + role*2 + slot = extra port
-const secIdx = (role, slot) => 6 + role * 2 + slot;
+// section index: 0..5 = stations, 6 + role*2 + slot = extra ports 1-2, 18 + role = the 4th (Mk IV) port. 24 = the hull (repair target)
+const NSEC = 24, HULL_T = 24;
+const secIdx = (role, slot) => slot < 2 ? 6 + role * 2 + slot : 18 + role;
+const secRole = k => k < 6 ? k : k < 18 ? (k - 6) >> 1 : k - 18, secSlot = k => k < 6 ? -1 : k < 18 ? (k - 6) & 1 : 2;
+const secLocal = (G, k) => k < 6 ? G.st[k] : (G.po[secRole(k)][secSlot(k)] || G.st[secRole(k)]);
 
 // ---------- stat labels (node effects are data-driven) ----------
 const FX = {
@@ -151,12 +159,15 @@ const TREES = {
     big: [['b_armor', 'Armored Bay', 'Repair bay section +1 HP', 450, 0, {}], ['b_auto', 'Auto-Repair Matrix', 'Knocked-out sections slowly repair themselves', 800, 1, {}]],
     ports: [['drone2', 'Drone Hangar', 'An extra attack drone'], ['sdrone', 'Shield Drone Bay', 'A drone orbits the ship and blocks shots'], ['welder', 'Auto-Welder', 'Hull regenerates 3x faster']] },
 };
+// v7: the 2nd and 4th node of pyramid row 2 give no ability, so they carry a small bonus on top of their stat
+const ROW2_BONUS = { pilot: [{ graze: 0.04 }, { nRate: 0.06 }], gun: [{ dmg: 0.06 }, { rof: 0.06 }], engineer: [{ pipEff: 0.06 }, { bombCd: 0.08 }], shield: [{ shRegen: 0.06 }, { shHp: 1 }], repair: [{ dDmg: 0.08 }, { dHp: 1 }] };
+for (const k in ROW2_BONUS) [1, 3].forEach((i, q) => { const nd = TREES[k].rows[1][i]; for (const f in ROW2_BONUS[k][q]) nd.fx[f] = +((nd.fx[f] || 0) + ROW2_BONUS[k][q][f]).toFixed(3); nd.sac = 1; });
 const EDGE_BONUS = 1.25;
 for (const k in TREES) TREES[k].rows.forEach((row, r) => row.forEach((nd, i) => {
   nd.edge = r < 4 && (i === 0 || i === row.length - 1);
   if (nd.edge) { for (const f in nd.fx) nd.fx[f] = +(nd.fx[f] * EDGE_BONUS).toFixed(3); if (nd.ab) nd.cdm = 0.8; }
   nd.cap = r === 4;
-  nd.d = nd.ab ? 'ACTIVE [' + (r < 2 ? 'E' : 'R') + ']: ' + ABIL[nd.ab].d + '. CD ' + Math.round(ABIL[nd.ab].cd * (nd.cdm || 1)) + 's' + (nd.edge ? ' (edge: -20% cooldown)' : '') : fxText(nd.fx) + (nd.edge ? ' (edge bonus +25%)' : '');
+  nd.d = nd.ab ? 'ACTIVE [' + (r < 2 ? 'S' : 'D') + ']: ' + ABIL[nd.ab].d + '. CD ' + Math.round(ABIL[nd.ab].cd * (nd.cdm || 1)) + 's' + (nd.edge ? ' (edge: -20% cooldown)' : '') : fxText(nd.fx) + (nd.edge ? ' (edge bonus +25%)' : '') + (nd.sac ? ' · bonus for giving up an ability' : '');
 }));
 // next-row choices allowed by a pyramid path
 function pyrAllowed(path, r) {
@@ -227,7 +238,7 @@ const PORT_UPS = {
 };
 function puVal(def, lv) { const v = def.per * lv; if (def.t === 'pct' || def.t === 'p') return '+' + Math.round(v * 100) + '%'; if (def.t === 'cd') return '-' + Math.round(v * 100) + '%'; return '+' + (+v.toFixed(2)); }
 
-const BOT_PORTS = [['twin', 'rockets'], ['sniper', 'beam'], ['drone2', 'sdrone'], ['aux', 'mines'], ['capbank', 'rear'], ['laser', 'scatter']];
+const BOT_PORTS = [['twin', 'rockets', 'scatter'], ['sniper', 'beam', 'rockets'], ['drone2', 'sdrone', 'welder'], ['aux', 'mines', 'tractor'], ['capbank', 'rear', 'reflect'], ['laser', 'scatter', 'rockets']];
 const BOT_PATH = { pilot: [3, 2, 2, 1, 1], gun: [1, 1, 1, 1, 0], engineer: [2, 2, 1, 1, 0], shield: [1, 1, 1, 1, 0], repair: [0, 0, 0, 0, 0] };
 const DIFFS = [{ n: 'EASY', lv: -1, m: 0.8 }, { n: 'NORMAL', lv: 0, m: 1 }, { n: 'HARD', lv: 2, m: 1.45 }, { n: 'ELITE', lv: 4, m: 2 }];
 const MTYPES = {
@@ -241,13 +252,15 @@ const MTYPES = {
   bombrun: { n: 'Kamikaze Swarm', d: 'Level 10+: bomb ships pour in from every edge. Shoot them down before they ram you', adv: 1 },
   siege: { n: 'Twin Fortress Siege', d: 'Level 10+: two enemy battle stations. Break both shields, silence every battery and hangar', adv: 1 },
   flagship: { n: 'Flagship Assault', d: 'Fight through the escorts, then destroy every port on the flagship' },
+  finale: { n: 'The Drowned Throne', d: 'Final battle: destroy every hard-point of Szarkath\'s flagship. Expect ion bolts, three phases and no mercy', adv: 1, story: 1 },
 };
 // enemy weapons. ALL enemy fire glows neon green. t: 0 laser, 1 missile, 2 flak. sd = damage to the player shield
 const WEAP = {
   las: { cd: 2.4, spd: 380, t: 0, r: 5, life: 2.2, sd: 1 },
   msl: { cd: 4.6, spd: 180, t: 1, r: 7, home: 1.4, life: 5, sd: 2 },
   flak: { cd: 3.2, spd: 300, t: 2, r: 5, n: 4, spread: 0.28, life: 1.8, sd: 0.6 },
-  ion: { cd: 6.5, spd: 300, t: 0, r: 12, heavy: 1, charge: 1.1, life: 3.5, sd: 3 },
+  ion: { cd: 10, spd: 400, t: 3, r: 12, heavy: 1, charge: 1.1, life: 4.2, sd: 7 },   // v7 ION BOLT: blue, medium speed, long range (~1700 px), very slow fire; a hit stuns for ION_STUN s and rapidly drains shields
+  pion: { cd: 7, spd: 560, life: 2.6, sd: 0 },
 };
 const STATION_W = ['las', 'msl', 'flak', 'las', 'ion', 'las', 'msl', 'flak'];
 const P_ = (x, y, f, arc, rng, w, n, cap) => ({ x, y, f, arc, rng, w, n, cap });
@@ -282,12 +295,18 @@ const ETYPES = [
     ports: [P_(190, 0, 0, 0.35, 720, 'ion', 'Spinal Ion Lance'), P_(80, -36, -PI / 2 + 0.35, 1.1, 680, 'las', 'Port Fore Battery'), P_(80, 36, PI / 2 - 0.35, 1.1, 680, 'las', 'Starboard Fore Battery'), P_(0, -60, -PI / 2 + 0.35, 1.2, 700, 'msl', 'Port Missile Bank'), P_(0, 60, PI / 2 - 0.35, 1.2, 700, 'msl', 'Starboard Missile Bank'),
       P_(-90, -84, -PI / 2 - 0.4, 1.0, 560, 'flak', 'Port Flak Tower'), P_(-90, 84, PI / 2 + 0.4, 1.0, 560, 'flak', 'Starboard Flak Tower'), P_(-146, -50, PI, 0.9, 650, 'las', 'Port Stern Gun'), P_(-146, 50, PI, 0.9, 650, 'las', 'Starboard Stern Gun'), P_(-40, -72, -PI / 2, 0, 0, 'dock', 'Port Hangar', 4), P_(-40, 72, PI / 2, 0, 0, 'dock', 'Starboard Hangar', 4)] },
   { id: 'kamikaze', n: 'Kamikaze Bomb Ship', sz: 0, r: 17, hp: 11, spd: 150, want: 0, minL: 6, cr: 3 },
+  // v7 FINAL BOSS (index 19, appended): Szarkath's flagship. 14 hard-points, a regenerating-once shield, docks that keep launching ships, three phases (see server finale logic)
+  { id: 'overlord', n: 'The Drowned Throne', sz: 3, r: 240, hp: 1, sh: 420, spd: 24, want: 780, minL: 99, cr: 300, mp: 1, php: 60, hull: { k: 'tri', p: [[250, 0], [-190, -150], [-190, 150]] },
+    ports: [P_(240, 0, 0, 0.3, 900, 'ion', 'Drowned Lance'), P_(110, -46, -PI / 2 + 0.35, 1.1, 720, 'las', 'Port Fore Battery'), P_(110, 46, PI / 2 - 0.35, 1.1, 720, 'las', 'Starboard Fore Battery'),
+      P_(30, -80, -PI / 2 + 0.3, 1.2, 740, 'msl', 'Port Missile Bank'), P_(30, 80, PI / 2 - 0.3, 1.2, 740, 'msl', 'Starboard Missile Bank'), P_(-40, -104, -PI / 2, 1.2, 700, 'las', 'Port Mid Battery'), P_(-40, 104, PI / 2, 1.2, 700, 'las', 'Starboard Mid Battery'),
+      P_(-110, -120, -PI / 2 - 0.4, 1.0, 580, 'flak', 'Port Flak Tower'), P_(-110, 120, PI / 2 + 0.4, 1.0, 580, 'flak', 'Starboard Flak Tower'), P_(-182, -60, PI, 0.9, 680, 'las', 'Port Stern Gun'), P_(-182, 60, PI, 0.9, 680, 'las', 'Starboard Stern Gun'),
+      P_(-90, -40, -PI / 2, 0, 0, 'dock', 'Port Tide Hangar', 4), P_(-90, 40, PI / 2, 0, 0, 'dock', 'Starboard Tide Hangar', 4), P_(-30, 0, 0, 1.4, 760, 'flak', 'Throne Flak')] },
 ];
 const PLANET_A = ['Kor', 'Vel', 'Tha', 'Ix', 'Mor', 'Zan', 'Dra', 'Cyr', 'Ul', 'Esk', 'Bes', 'Nar', 'Ord', 'Yav', 'Kes', 'Tal', 'Ryl', 'Sul', 'Ost', 'Mav'];
 const PLANET_B = ['a', 'o', 'u', 'e', 'i', 'ae', 'ou', 'y'];
 const PLANET_C = ['lis', 'thar', 'nox', 'ria', 'dor', 'vex', ' Prime', 'mir', 'ten', 'gar', 'phos', ' IV', ' VII', 'lune', 'kesh', 'tura', 'zan'];
 const PLANET_K = ['rocky', 'ice', 'lava', 'ocean', 'gas', 'desert', 'toxic', 'jungle', 'storm', 'moon', 'ringed', 'city'];
-const out = { PORT_UPS, PU_HP, puVal, VERSION, MONEY_MULT, RR_CFG, RR_NAMES, BOMB_CFG, ARENA, EFIRE_WEAK_LV, EFIRE_WEAK, REPAIR_CFG, ABS, ABSX, statLine, fxLines, ROLES, RNAME, RSHORT, PORT_NAMES, TREE_OF, NODE_COST, infCost, PORT_COST, portUpCost, PORT_MAX_LV, MK_COST, MK_NAMES, CORE_RATE, SHIELD_ARC0, SHIELD_ARC_MAX, SHIELD_DOWN,
+const out = { ION_STUN, ION_COST, ION_CD, NSEC, HULL_T, secRole, secSlot, secLocal, HULL_PER_METAL, ELITE, PORT_UPS, PU_HP, puVal, VERSION, MONEY_MULT, RR_CFG, RR_NAMES, BOMB_CFG, ARENA, EFIRE_WEAK_LV, EFIRE_WEAK, REPAIR_CFG, ABS, ABSX, statLine, fxLines, ROLES, RNAME, RSHORT, PORT_NAMES, TREE_OF, NODE_COST, infCost, PORT_COST, portUpCost, PORT_MAX_LV, MK_COST, MK_NAMES, CORE_RATE, SHIELD_ARC0, SHIELD_ARC_MAX, SHIELD_DOWN,
   GEO, secIdx, FX, fxText, ABIL, INNATE, TREES, pyrAllowed, treeStats, infCap, BOT_PORTS, BOT_PATH, DIFFS, MTYPES, WEAP, ETYPES, PLANET_A, PLANET_B, PLANET_C, PLANET_K };
 if (typeof module !== 'undefined' && module.exports) module.exports = out; else root.DEFS = out;
 })(this);

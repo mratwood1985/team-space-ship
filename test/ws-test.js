@@ -18,14 +18,14 @@ function client(room, name, role) {
 async function until(fn, ms) { const d = Date.now() + ms; while (Date.now() < d) { if (fn()) return true; await sleep(200); } return false; }
 (async () => {
   let ok = true; const check = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!cond) ok = false; };
-  const h0 = await (await fetch(BASE + '/health')).json(); console.log('health', h0); check(h0.v === D.VERSION && D.VERSION === 6, 'health reports v5');
+  const h0 = await (await fetch(BASE + '/health')).json(); console.log('health', h0); check(h0.v === D.VERSION && D.VERSION === 7, 'health reports v5');
   const t0 = Date.now(); const a = await client('', 'Alice', 0); check(a.me.role === 0 && a.me.pub, `public join as Pilot in ${Date.now() - t0}ms (room ${a.me.code})`);
   await sleep(2500);
   check(a.snaps > 25, `snapshots streaming: ${a.snaps} in 2.5s`);
   check(a.last.crew.filter(c => c[1]).length === 5, 'other 5 seats are bots: ' + a.last.crew.map(c => c[0] + (c[1] ? '(bot)' : '')).join(', '));
-  check(a.last.crew.every(c => Array.isArray(c[5]) && c[5].length === 3 && Array.isArray(c[7]) && c[7].length === 2), 'every crew entry carries 3 ability slots + 2 port slots');
+  check(a.last.crew.every(c => Array.isArray(c[5]) && c[5].length === 3 && Array.isArray(c[7]) && c[7].length === 3), 'every crew entry carries 3 ability slots + 3 port slots (v7: Mk IV elite slot)');
   const S = a.last.sh;
-  check(S.sc.length === 18 && S.dn.length === 18, 'snapshot has 18 ship sections (6 stations + 12 port sockets)');
+  check(S.sc.length === D.NSEC && S.dn.length === D.NSEC && D.NSEC === 24, 'snapshot has 24 ship sections (6 stations + 12 port sockets + 6 elite sockets)');
   check(S.sc.slice(0, 6).every(v => v >= 0) && S.sc.slice(6).every(v => v === -1), 'Mk I: only the 6 stations exist, no extra port sections yet');
   check(S.arc === 15 && S.shm > 0 && S.shp <= S.shm, `shield starts as a ${S.arc}° arc, ${S.shp}/${S.shm} HP (${S.shd ? 'recharging' : 'up'})`);
   a.send({ t: 'i', ax: a.last.sh.x + 1000, ay: a.last.sh.y, f: 1, idle: 1 });
@@ -86,14 +86,14 @@ async function until(fn, ms) { const d = Date.now() + ms; while (Date.now() < d)
   // ---- ports are permanent, need a Mk upgrade, are bought per seat ----
   b.send({ t: 'buy', tree: 'pilot', kind: 'port', id: 'twin', slot: 0 }); await sleep(300); check(!b.last.crew[0][7][0], 'port refused at Mk I (needs a ship upgrade)');
   if (DEV) {
-    b.send({ t: 'dev', op: 'give', cr: 0, cores: 40 }); await sleep(300); b.send({ t: 'mk' }); await sleep(400);
+    b.send({ t: 'dev', op: 'give', cr: 0, cores: 120 }); await sleep(300); b.send({ t: 'mk' }); await sleep(400);
     check(b.last.mk === 1 && b.last.sh.sc[6 + 0] === -1, 'Mk II bought with ' + D.MK_COST[1] + ' cores; the section appears only once the port is installed');
     b.send({ t: 'buy', tree: 'pilot', kind: 'port', id: 'twin', slot: 0 }); await sleep(400);
     check(b.last.crew[0][7][0] && b.last.crew[0][7][0][0] === 'twin' && b.last.sh.sc[6] >= 0, 'Wing Cannon installed: pilot gets a physical extra section (sc[6]=' + b.last.sh.sc[6] + ')');
     b.send({ t: 'buy', tree: 'pilot', kind: 'port', id: 'rockets', slot: 0 }); await sleep(300); check(b.last.crew[0][7][0][0] === 'twin', 'port choice is permanent');
     b.send({ t: 'buy', tree: 'pilot', kind: 'pup', slot: 0, opt: 'dmg' }); await sleep(300); check(b.last.crew[0][7][0][1] === 1, 'each port is upgraded separately (lv ' + b.last.crew[0][7][0][1] + ')');
-    const g0 = b.me.cr; b.send({ t: 'mk' }); await sleep(400); check(b.last.mk === 2, 'Mk III bought'); b.send({ t: 'core' }); await sleep(400);
-    check(b.me.cr === g0 + Math.round(D.CORE_RATE * D.MONEY_MULT), `core -> credits conversion after Mk III: +${b.me.cr - g0} (rate ${D.CORE_RATE} x ${D.MONEY_MULT} money bonus)`);
+    const g0 = b.me.cr; b.send({ t: 'mk' }); await sleep(400); check(b.last.mk === 2, 'Mk III bought'); b.send({ t: 'core' }); await sleep(300); check(b.me.cr === g0, 'Morph Metal cannot be sold before Mk IV'); b.send({ t: 'mk' }); await sleep(400); check(b.last.mk === 3, 'Mk IV bought for ' + D.MK_COST[3] + ' Morph Metal'); const h0_ = b.last.sh.hm; b.send({ t: 'core', hull: 1 }); await sleep(400); check(b.last.sh.hm === h0_ + D.HULL_PER_METAL && b.last.hpl === 1, 'Morph Metal -> +' + D.HULL_PER_METAL + ' max hull'); b.send({ t: 'core' }); await sleep(400);
+    check(b.me.cr === g0 + Math.round(D.CORE_RATE * D.MONEY_MULT), `Morph Metal -> credits conversion after Mk IV: +${b.me.cr - g0} (rate ${D.CORE_RATE} x ${D.MONEY_MULT} money bonus)`);
     b.send({ t: 'dev', op: 'hurt', k: [6] }); await sleep(300);
   }
   for (const x of [b, c, d]) x.send({ t: 'ready' });
@@ -107,7 +107,7 @@ async function until(fn, ms) { const d = Date.now() + ms; while (Date.now() < d)
   check((a.evs.b || 0) > 20, `lasers fired (public): ${a.evs.b}`); check((a.evs.boom || 0) >= 2, `explosions: ${a.evs.boom}`);
   console.log('private event counts:', JSON.stringify(b.evs));
   d.ws.close(); await sleep(800); check(c.last.crew[4][1] === 1, 'Dan left -> bot took the Shield seat');
-  const h = await (await fetch(BASE + '/health')).json(); console.log('health', h); check(h.v === 6, 'health reports v5');
+  const h = await (await fetch(BASE + '/health')).json(); console.log('health', h); check(h.v === 7, 'health reports v5');
   a.ws.close(); b.ws.close(); c.ws.close();
   console.log(ok ? 'ALL TESTS PASSED' : 'SOME TESTS FAILED'); process.exit(ok ? 0 : 1);
 })().catch(e => { console.error(e); process.exit(1); });
