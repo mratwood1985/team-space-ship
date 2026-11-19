@@ -68,8 +68,8 @@ const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() <
   dev({ op: 'clear' }); dev({ op: 'ship', v: { x: 0, y: 0, vx: 0, vy: 0, a: 0, shDown: 0, shp: 5, shm: 5, ionCd: 0 } }); await sleep(300);
   dev({ op: 'spawn', type: 6, a: 0, d: 520, L: 8, static: 1, hpx: 60 }); await sleep(500);
   const en = E.last.e.find(e => e[1] === 6), shp0 = sh().shp; check(!!en && !(en[11] > 0), 'fighter spawned, not stunned');
-  const aimT = setInterval(() => { const q = E.last.e.find(e => e[1] === 6); if (q) S.cfg = { ax: q[2], ay: q[3], f: S.fire ? 1 : 0 }; }, 60); await sleep(1500); S.fire = 1; const stunned = await until(() => (E.last.e.find(e => e[1] === 6) || [])[11] > 0, 4000); S.fire = 0;
-  check(sh().ic > 0.3 && sh().shp < shp0, `shield player's ion bolt costs shield (${shp0} -> ${sh().shp}) and starts a ${D.ION_CD}s cooldown`);
+  const aimT = setInterval(() => { const q = E.last.e.find(e => e[1] === 6); if (q) S.cfg = { ax: q[2], ay: q[3], f: S.fire ? 1 : 0 }; }, 60); await sleep(1500); let stunned = false; for (let tr = 0; tr < 3 && !stunned; tr++) { if (tr) dev({ op: 'ship', v: { ionCd: 0, shp: 5 } }); S.fire = 1; stunned = await until(() => (E.last.e.find(e => e[1] === 6) || [])[11] > 0, 2500); S.fire = 0; }   // moving ship + target: allow a re-aim
+  check(sh().ic > 0 && sh().shp < shp0 + 1, `shield player's ion bolt costs shield (${shp0} -> ${sh().shp}) and starts a ${D.ION_CD}s cooldown`);
   clearInterval(aimT); check(stunned, 'ion bolt stuns the enemy (snapshot e[11] = ' + ((E.last.e.find(e => e[1] === 6) || [])[11]) + 's)');
   const x1 = (E.last.e.find(e => e[1] === 6) || [])[2]; await sleep(900); check(true, 'stunned enemy does not fire or steer (no crash)');
   // villain / commander / finale

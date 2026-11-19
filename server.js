@@ -575,7 +575,7 @@ class Room {
     if (s.shDown <= 0 && s.shHit > 3) s.shp = min(s.shm, s.shp + (0.12 + this.S(SHIELD, 'shRegen') + 0.1 * this.portEff(SHIELD, 'capbank') + this.pu(SHIELD, 'capbank', 'regen')) * this.pipF(2) * DT);
     if (this.can(SHIELD) && Sh.f && !stn && s.ionCd <= 0 && s.shDown <= 0 && s.shp > ION_COST + 0.5) { // v7: the Shield player's ion bolt (click): costs shield strength
       s.ionCd = ION_CD; s.shp -= ION_COST; s.shHit = 0; const ia = s.sa, sx = s.x + cos(ia) * (g.sr + 6), sy = s.y + sin(ia) * (g.sr + 6);
-      const B = this.addBolt(sx, sy, ia, WEAP.pion.spd, 0, 0, 6, WEAP.pion.life); if (B) B.ion = 1; this.ev('ionf', round(sx), round(sy), r2(ia));
+      const B = this.addBolt(sx, sy, ia, WEAP.pion.spd, 0, 0, 6, WEAP.pion.life); if (B) B.ion = 1; this.ev('ionf', round(sx), round(sy), round(ia * 100) / 100);
     }
     if (this.can(SHIELD)) {
       const tgt = atan2(Sh.ay - s.y, Sh.ax - s.x), spin = 3 * (1 + this.S(SHIELD, 'shSpin')) * (this.bf(SHIELD, 'stim') ? 1.4 : 1) * 1;
