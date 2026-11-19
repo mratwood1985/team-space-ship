@@ -1180,7 +1180,8 @@ function drawHUD(o, T) {
   v7Hud(o, T);
   const bw = min(250, W * 0.34), bx = 12, by = H - (isTouch ? 238 : 106);
   cx.textAlign = 'left'; cx.font = 'bold 11px monospace';
-  { const g_ = cx.createLinearGradient(0, by - 22, 0, by + 86); g_.addColorStop(0, 'rgba(14,26,44,.62)'); g_.addColorStop(1, 'rgba(4,8,16,.5)'); cx.fillStyle = g_; cx.fillRect(bx - 8, by - 24, bw + 16, 128); cx.strokeStyle = 'rgba(110,170,230,.45)'; cx.lineWidth = 1; cx.strokeRect(bx - 7.5, by - 23.5, bw + 15, 127); cx.fillStyle = 'rgba(110,170,230,.8)'; for (const [qx, qy] of [[bx - 8, by - 22], [bx + bw + 8, by - 22], [bx - 8, by + 88], [bx + bw + 8, by + 88]]) cx.fillRect(qx - 2, qy - 2, 4, 4); }
+  { const g_ = cx.createLinearGradient(0, by - 22, 0, by + 86); g_.addColorStop(0, 'rgba(14,26,44,.62)'); g_.addColorStop(1, 'rgba(4,8,16,.5)'); cx.fillStyle = g_; const ph_ = me.role === SHIELD ? 142 : 128; cx.fillRect(bx - 8, by - 24, bw + 16, ph_); cx.strokeStyle = 'rgba(110,170,230,.45)'; cx.lineWidth = 1; cx.strokeRect(bx - 7.5, by - 23.5, bw + 15, ph_ - 1); cx.fillStyle = 'rgba(110,170,230,.8)'; for (const [qx, qy] of [[bx - 8, by - 22], [bx + bw + 8, by - 22], [bx - 8, by + 88], [bx + bw + 8, by + 88]]) cx.fillRect(qx - 2, qy - 2, 4, 4); }
+  hudPortrait(bx, by, bw, W, H, sh);
   { const hf_ = sh.h / sh.hm, crit_ = hf_ <= 0.1 && !sh.dead, fl_ = crit_ && (T * 5 | 0) % 2; cx.font = 'bold 14px monospace'; cx.fillStyle = crit_ ? (fl_ ? '#fff' : '#f44') : hf_ < 0.5 ? '#fc8' : '#cde'; cx.fillText(`HULL ${sh.h.toFixed(1)}/${sh.hm}${crit_ ? '  ⚠ CRITICAL' : ''}`, bx, by - 5);
     hudBar(bx, by, bw, 18, hf_, crit_ ? (fl_ ? '#ff8a8a' : '#f22') : hf_ < 0.35 ? '#f44' : hf_ < 0.5 ? '#fb4' : '#8ff', 'rgba(0,30,40,.75)'); cx.fillStyle = 'rgba(255,255,255,.55)'; cx.fillRect(bx + bw * 0.5 - 0.5, by - 2, 1, 22); cx.fillStyle = 'rgba(255,90,90,.8)'; cx.fillRect(bx + bw * 0.1 - 0.5, by - 2, 1, 22); cx.font = 'bold 11px monospace'; }
   const down = sh.shd > 0 || sh.shp <= 0;
@@ -1219,64 +1220,103 @@ function faceHtml(w, size) { return w.img ? `<img src="${portraitSrc(w.img)}" al
     `<div class="rc big" style="--c:#4dffb0"><img src="${portraitSrc('szarkath')}" alt="Szarkath" width="64" height="64"><div class="t"><b>${ST.VILLAIN.name}</b><em>the final boss</em><span>Ten thousand years asleep, and he still talks too much. He taunts you from the dark, sends his fleets after you, and waits at the Hollow Gate.</span></div></div>`;
 })();
 // ----- dialogue panels: never block play. Click = next line, Skip / Esc = close. Auto-advances. -----
-const dlg = { q: [], i: 0, t: 0, dur: 4, on: 0, head: '' };
+const dlg = { q: [], i: 0, t: 0, dur: 4, on: 0, head: '', ids: null };
 function dlgShow() {
   const l = dlg.q[dlg.i], w = ST.WHO[l[0]] || ST.WHO.cmd, el = $('dlg');
   el.style.setProperty('--c', w.col); el.classList.remove('hide');
   el.innerHTML = faceHtml(Object.assign({ id: l[0] }, w), 84) + `<div style="flex:1;min-width:0"><div class="ch">${dlg.head} · ${dlg.i + 1}/${dlg.q.length}</div><div class="dn">${w.name}</div><div class="dt">${l[1]}</div><div class="dh"><span>click: next · Esc: skip · the game keeps running</span><button id="dskip">Skip ▶▶</button></div></div>`;
   $('dskip').onclick = e => { e.stopPropagation(); dlgEnd(); };
   dlg.t = 0; dlg.dur = Math.max(3.6, l[1].length * 0.055); tone(1500, 0.05, 'square', 0.03); tone(1100, 0.06, 'square', 0.03, null, null, 0.07);
+  vStopDlg(); const vid = dlg.ids && dlg.ids[dlg.i];   // v8: short lines are voiced (the panel waits for the clip to finish); long ones stay text-only
+  if (vid && l[1].length <= ST.VOICE_MAX) { const i0 = dlg.i; vPlay(vid, l[1], l[0], 1, { dlg: 1, done: d => { if (dlg.on && dlg.i === i0) dlg.dur = Math.max(dlg.dur, d + 0.9); } }); }
 }
-function dlgStart(lines, head) { if (!lines || !lines.length || dlg.on) return; dlg.q = lines; dlg.i = 0; dlg.on = 1; dlg.head = head; dlgShow(); }
+function dlgStart(lines, head, ids) { if (!lines || !lines.length || dlg.on) return; dlg.ids = ids || null; dlg.q = lines; dlg.i = 0; dlg.on = 1; dlg.head = head; dlgShow(); }
 function dlgNext() { dlg.i++; if (dlg.i >= dlg.q.length) dlgEnd(); else dlgShow(); }
-function dlgEnd() { dlg.on = 0; $('dlg').classList.add('hide'); }
+function dlgEnd() { vStopDlg(); dlg.on = 0; $('dlg').classList.add('hide'); }
 $('dlg').onclick = () => dlgNext();
 window.addEventListener('keydown', e => { if (e.key === 'Escape' && dlg.on) dlgEnd(); });
-function chapterStart(s) { const M = s.mi; if (M && M.pre && M.ch) { const C = ST.CHAPTERS[M.ch]; dlgStart(C.pre, 'Chapter ' + M.ch + ' · ' + C.title); } }
-function chapterEnd(s) { const r = s.res; if (r && r.win && r.ch) { const C = ST.CHAPTERS[r.ch]; dlgStart(C.post.concat(r.ch === 12 ? ST.EPILOGUE : []), 'Chapter ' + r.ch + ' complete · ' + C.title); } }
+function chapterStart(s) { const M = s.mi; if (M && M.pre && M.ch) { const C = ST.CHAPTERS[M.ch]; dlgStart(C.pre, 'Chapter ' + M.ch + ' · ' + C.title, C.pre.map((_, i) => ST.csId(M.ch, 'pre', i))); } }
+function chapterEnd(s) { const r = s.res; if (r && r.win && r.ch) { const C = ST.CHAPTERS[r.ch]; dlgStart(C.post.concat(r.ch === 12 ? ST.EPILOGUE : []), 'Chapter ' + r.ch + ' complete · ' + C.title, C.post.map((_, i) => ST.csId(r.ch, 'post', i)).concat(r.ch === 12 ? ST.EPILOGUE.map((_, i) => ST.csId('ep', 'e', i)) : [])); } }
 // ----- in-mission comm popups -----
 let commT = 0;
-function commShow(who, text, tag) {
+function commShow(who, text, tag, vid) {
   const w = ST.WHO[who] || (typeof who === 'object' ? who : ST.WHO.cmd), el = $('comm'); w.id = w.id || who;
   el.style.setProperty('--c', w.col); el.innerHTML = faceHtml(w, 58) + `<div style="flex:1"><div class="cs">${tag || 'INCOMING TRANSMISSION'}</div><div class="cn">${w.name}</div><div class="ct">${text}</div></div>`;
   el.classList.remove('hide'); el.style.animation = 'none'; void el.offsetWidth; el.style.animation = ''; commT = 5.4;
   tone(1700, 0.05, 'square', 0.035); tone(1250, 0.05, 'square', 0.035, null, null, 0.07);
+  if (vid) vPlay(vid, text, w.id, 1);
 }
+const cmdClip = (w, k, ix) => k + '_' + (cmdKey(w) === 'lt' ? 'lt' + ix : cmdKey(w));
+const cmdKey = w => ['kraal', 'durmok', 'grakk', 'sskarra'].includes(w.id) ? w.id : 'lt';
 const cmdWho = i => i === 99 ? Object.assign({ id: 'szarkath' }, ST.VILLAIN, { col: ST.VILLAIN.col }) : (ci => ci ? { id: ci.id, name: ci.name, img: ci.img, col: '#ff7a5a' } : ST.WHO.cmd)(ST.cmdInfo(i));
 function v7Event(e, s) {
   const k = e[0];
   if (k === 'comm') {
-    if (e[1] === 'v') { const t = e[3] ? ST.SENDS[e[2] % ST.SENDS.length] : ST.TAUNTS[e[2] % ST.TAUNTS.length]; commShow('szarkath', t, e[3] ? 'VILLAIN · REINFORCEMENTS INBOUND' : 'VILLAIN TRANSMISSION'); }
-    else if (e[1] === 'c') { const l = e[3] ? ['tavi', 'Care package dropped! Hull patched and a few shiny things for you. Mireth always pay.'] : ST.CAT_COMMS[e[2] % ST.CAT_COMMS.length]; commShow(l[0], l[1], 'MIRETH ALLIES'); if (e[3]) { SFX.core(); toast('🐾 Mireth care package: hull repaired + credits', '#c9a0ff'); } }
+    if (e[1] === 'v') { const t = e[3] ? ST.SENDS[e[2] % ST.SENDS.length] : ST.TAUNTS[e[2] % ST.TAUNTS.length]; commShow('szarkath', t, e[3] ? 'VILLAIN · REINFORCEMENTS INBOUND' : 'VILLAIN TRANSMISSION', e[3] ? 'vs' + (e[2] % ST.SENDS.length) : 'vt' + (e[2] % ST.TAUNTS.length)); }
+    else if (e[1] === 'c') { const l = e[3] ? ['tavi', 'Care package dropped! Hull patched and a few shiny things for you. Mireth always pay.'] : ST.CAT_COMMS[e[2] % ST.CAT_COMMS.length]; commShow(l[0], l[1], 'MIRETH ALLIES', e[3] ? 'cat_care' : 'cat' + (e[2] % ST.CAT_COMMS.length)); if (e[3]) { SFX.core(); toast('🐾 Mireth care package: hull repaired + credits', '#c9a0ff'); } }
     return 1; }
   if (k === 'cmd') {
     const w = cmdWho(e[1]);
-    if (e[2] === 0) { commShow(w, e[1] === 99 ? ST.BOSS_LINES.open : ST.CMD_INTRO[(e[3] || 0) % ST.CMD_INTRO.length], e[1] === 99 ? 'FINAL BOSS' : 'COMMANDER ' + (w.name || '').toUpperCase()); toast('☠ ' + w.name + ' commands this ship', '#ff7a5a'); }
-    else if (e[2] === 2) { commShow(w, e[1] === 99 ? ST.BOSS_LINES.kill : ST.CMD_DEATH[(e[3] || 0) % ST.CMD_DEATH.length], e[1] === 99 ? 'THE DROWNED KING FALLS' : 'COMMANDER DOWN'); banner('☠ ' + w.name.toUpperCase() + ' ELIMINATED', 2.2); SFX.core(); }
+    if (e[2] === 0) { const ix = ST.cmdLine(cmdKey(w), 'i', e[3]); commShow(w, e[1] === 99 ? ST.BOSS_LINES.open : ST.CMD_INTRO[ix], e[1] === 99 ? 'FINAL BOSS' : 'COMMANDER ' + (w.name || '').toUpperCase(), e[1] === 99 ? 'vb_open' : cmdClip(w, 'ci', ix)); toast('☠ ' + w.name + ' commands this ship', '#ff7a5a'); }
+    else if (e[2] === 2) { const ix = ST.cmdLine(cmdKey(w), 'd', e[3]); commShow(w, e[1] === 99 ? ST.BOSS_LINES.kill : ST.CMD_DEATH[ix], e[1] === 99 ? 'THE DROWNED KING FALLS' : 'COMMANDER DOWN', e[1] === 99 ? 'vb_kill' : cmdClip(w, 'cd', ix)); banner('☠ ' + w.name.toUpperCase() + ' ELIMINATED', 2.2); SFX.core(); }
     return 1; }
-  if (k === 'boss') { commShow('szarkath', e[1] === 2 ? ST.BOSS_LINES.p2 : ST.BOSS_LINES.p3, 'FINAL BOSS · PHASE ' + e[1]); banner(e[1] === 2 ? 'THE TIDE RISES' : 'THE KING IS FURIOUS', 2.4); shake = max(shake, 14); return 1; }
+  if (k === 'boss') { commShow('szarkath', e[1] === 2 ? ST.BOSS_LINES.p2 : ST.BOSS_LINES.p3, 'FINAL BOSS · PHASE ' + e[1], e[1] === 2 ? 'vb_p2' : 'vb_p3'); banner(e[1] === 2 ? 'THE TIDE RISES' : 'THE KING IS FURIOUS', 2.4); shake = max(shake, 14); return 1; }
   if (k === 'ion') { const kind = e[4]; sparks(e[1], e[2], 22, '#6fb8ff', 300, 0.6, 2); sparks(e[1], e[2], 8, '#ffffff', 200, 0.3, 2); P({ k: 5, x: e[1], y: e[2], life: 0.4, max: 0.4, s: 110, c: '#3a8cff' }); SFX.stun(); if (kind === 2) { shake = max(shake, 16); flash = 0.45; flashC = '#38f'; toast('⚡ ION HIT: the ship is STUNNED for ' + D.ION_STUN + 's', '#7fd0ff'); } return 1; }
   if (k === 'ionb') { sparks(e[1], e[2], 16, '#6fb8ff', 220, 0.5, 2); SFX.stun(); return 1; }
   if (k === 'ionf') { sparks(e[1], e[2], 8, '#7fd0ff', 160, 0.3, 2); SFX.ionf(); return 1; }
   if (k === 'hc') { toast('♥ Morph Metal bonded to the hull: +' + D.HULL_PER_METAL + ' max hull', '#6f6'); SFX.core(); return 1; }
-  if (k === 'sd' && s.ph === 'mission') { const kk = e[1], nm = kk < 6 ? PORT_NAMES[kk] : RNAME[D.secRole(kk)] + ' ' + (D.secSlot(kk) === 2 ? 'elite ' : '') + ((portInfo(D.secRole(kk), D.secSlot(kk)) || { name: 'port' }).name); finnSay(ST.FINN_LINES.port[0].replace('{}', nm), ST.FINN_LINES.port[1].replace('{}', nm), 0); return 0; }
+  if (k === 'sd' && s.ph === 'mission') { const kk = e[1], nm = kk < 6 ? PORT_NAMES[kk] : RNAME[D.secRole(kk)] + ' ' + (D.secSlot(kk) === 2 ? 'elite ' : '') + ((portInfo(D.secRole(kk), D.secSlot(kk)) || { name: 'port' }).name); const pn = kk < 6 ? PORT_NAMES[kk] : (portInfo(D.secRole(kk), D.secSlot(kk)) || { name: 'port' }).name; finnSay(pn + ' is down.', ST.FINN_LINES.port[1].replace('{}', nm), 0, 'finn_' + vSlug(pn)); return 0; }
   return 0;
 }
 SFX.stun = function () { if (!gate('stun', 120)) return; tone(1400, 0.3, 'sawtooth', 0.08, 120); noise(0.3, 0.12, 4000, 400, 'bandpass'); tone(90, 0.4, 'square', 0.07, 40); };
 SFX.ionf = function () { if (!gate('ionf', 120)) return; tone(300, 0.35, 'sawtooth', 0.09, 1400); tone(1900, 0.18, 'sine', 0.04, 500); };
-// ----- Finn's voice announcements (Web Speech API) + comm beep, rate-limited; every client reads the same snapshot so everyone hears them -----
-let voiceLast = 0, voicePick = null, halfFlag = 0, lowFlag = 0;
-function pickVoice() {
-  if (voicePick || !window.speechSynthesis) return voicePick; const vs = speechSynthesis.getVoices(); if (!vs.length) return null;
-  const en = vs.filter(v => /^en/i.test(v.lang)); voicePick = en.find(v => /(daniel|alex|david|fred|george|ryan|guy|mark|male)/i.test(v.name) && !/female/i.test(v.name)) || en[0] || vs[0]; return voicePick;
+// ----- v8 voices: prerecorded neural TTS clips (public/voice/*.mp3, edge-tts, ~1.1 MB in total), lazy-loaded and played through WebAudio so they follow the game volume/mute.
+// Lines without a clip (or if a clip fails to load) fall back to speechSynthesis with the most natural installed voice (Natural/Neural/Online/Google), pitch 1, rate 1.
+const VOICE = { buf: {}, loading: {}, bad: {}, cur: null, pri: 0, pre: 0 };
+const vSlug = n => String(n).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+function vLoad(id) {
+  if (VOICE.buf[id]) return Promise.resolve(VOICE.buf[id]); if (VOICE.bad[id] || !A.ctx) return Promise.resolve(null); if (VOICE.loading[id]) return VOICE.loading[id];
+  return VOICE.loading[id] = fetch('voice/' + id + '.mp3').then(r => { if (!r.ok) throw 0; return r.arrayBuffer(); }).then(b => new Promise((ok, no) => { const p = A.ctx.decodeAudioData(b, ok, no); if (p && p.catch) p.catch(no); }))
+    .then(b => { VOICE.buf[id] = b; delete VOICE.loading[id]; return b; }).catch(() => { VOICE.bad[id] = 1; delete VOICE.loading[id]; return null; });
 }
-if (window.speechSynthesis) { try { speechSynthesis.onvoiceschanged = () => { voicePick = null; pickVoice(); }; } catch (e) { } }
-function finnSay(spoken, shown, urgent) {
+function vPrefetch() {   // once per page, when the first mission starts: the short callouts everyone hears most
+  if (VOICE.pre || !A.ctx) return; VOICE.pre = 1; const ids = ['finn_half', 'finn_low'].concat(D.PORT_NAMES.map(n => 'finn_' + vSlug(n)));
+  ids.forEach((id, i) => setTimeout(() => vLoad(id), 400 + i * 350));
+}
+const FEM = { ishkara: 1, tavi: 1, sskarra: 1 };
+let voicePick = {};
+function pickVoice(who) {
+  const g = FEM[who] ? 'f' : 'm'; if (voicePick[g] || !window.speechSynthesis) return voicePick[g] || null; const vs = speechSynthesis.getVoices(); if (!vs.length) return null;
+  const mRe = /(andrew|guy|ryan|brian|christopher|davis|eric|roger|steffan|thomas|william|daniel|david|mark|george|alex|james|male)/i, fRe = /(aria|jenny|ava|emma|michelle|sonia|natasha|libby|samantha|zira|hazel|susan|karen|female)/i;
+  const sc = v => (/(natural|neural|online)/i.test(v.name) ? 10 : /google/i.test(v.name) ? 8 : 0) + (/^en[-_](us|gb)/i.test(v.lang) ? 3 : /^en/i.test(v.lang) ? 2 : -20) + ((g === 'm' ? mRe.test(v.name) && !/female/i.test(v.name) : fRe.test(v.name) || /female/i.test(v.name)) ? 4 : 0) + (v.localService ? 0.5 : 0);
+  return voicePick[g] = vs.slice().sort((a, b) => sc(b) - sc(a))[0] || null;
+}
+if (window.speechSynthesis) { try { speechSynthesis.onvoiceschanged = () => { voicePick = {}; }; } catch (e) { } }
+function vSpeak(text, who) {
+  if (!window.speechSynthesis) return;
+  try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance(text), v = pickVoice(who); if (v) { u.voice = v; u.lang = v.lang; } u.pitch = 1; u.rate = 1; u.volume = 0.95; setTimeout(() => speechSynthesis.speak(u), 100); } catch (e) { }
+}
+function vStopDlg() { if (VOICE.cur && VOICE.cur.__dlg) { try { VOICE.cur.stop(); } catch (e) { } VOICE.cur = null; VOICE.pri = 0; } }
+function vPlay(id, text, who, pri, opt) {   // pri 1 = comm line, 2 = urgent callout: a lower priority never cuts a playing higher one
+  if (A.muted || window.__noVoice) return; const t0 = performance.now();
+  if (VOICE.cur && VOICE.pri > pri) return;
+  vLoad(id).then(buf => {
+    if (A.muted || performance.now() - t0 > 3500) return; if (VOICE.cur && VOICE.pri > pri) return;
+    if (!buf || !A.ctx) { if (!opt) vSpeak(text, who); return; }   // cutscene lines never fall back to the robot voice
+    if (A.ctx.state === 'suspended') A.ctx.resume();
+    if (VOICE.cur) { try { VOICE.cur.stop(); } catch (e) { } }
+    if (!A.voice) { A.voice = A.ctx.createGain(); A.voice.gain.value = 1.25; A.voice.connect(A.master); }
+    const src = A.ctx.createBufferSource(); src.buffer = buf; src.connect(A.voice); src.__dlg = opt && opt.dlg; if (opt && opt.done) opt.done(buf.duration); VOICE.cur = src; VOICE.pri = pri; src.onended = () => { if (VOICE.cur === src) { VOICE.cur = null; VOICE.pri = 0; } };
+    src.start(A.ctx.currentTime + 0.05);
+  });
+}
+// ----- Finn's callouts: comm beep + popup + voice clip, rate-limited; every client reads the same snapshot so everyone hears them -----
+let voiceLast = -1e9, halfFlag = 0, lowFlag = 0;
+function finnSay(spoken, shown, urgent, vid) {
   const now = performance.now(); if (now - voiceLast < (urgent ? 3000 : 7500)) return; voiceLast = now;
   tone(1560, 0.06, 'square', 0.05); tone(1040, 0.08, 'square', 0.05, null, null, 0.09);
   commShow('finn', shown, 'REPAIR · FINN HALLORAN');
-  if (A.muted || !window.speechSynthesis || window.__noVoice) return;
-  try { speechSynthesis.cancel(); const u = new SpeechSynthesisUtterance('Finn, repair. ' + spoken), v = pickVoice(); if (v) u.voice = v; u.pitch = 0.78; u.rate = 1.06; u.volume = 0.95; u.lang = v ? v.lang : 'en-US'; setTimeout(() => speechSynthesis.speak(u), 140); } catch (e) { }
+  vPlay(vid, spoken, 'finn', urgent ? 2 : 1);
 }
 // ----- ship alarm below 10% hull (everybody hears it until the hull is back above 10% or the ship is destroyed) -----
 let alarmT = 0;
@@ -1284,10 +1324,23 @@ function v7Frame(dt, o) {
   if (commT > 0) { commT -= dt; if (commT <= 0) $('comm').classList.add('hide'); }
   if (dlg.on) { dlg.t += dt; if (dlg.t > dlg.dur) dlgNext(); }
   const s = lastSnap; if (!s || !o) return; const sh = s.sh, inM = s.ph === 'mission', fr = sh.h / sh.hm;
-  const low = inM && fr <= 0.1 && !sh.dead; $('alarmbar').classList.toggle('hide', !low);
-  if (low) { alarmT -= dt; if (alarmT <= 0) { alarmT = 1.0; tone(880, 0.42, 'sawtooth', 0.075, 600); tone(640, 0.42, 'square', 0.045, 440, null, 0.44); } if (!lowFlag) { lowFlag = 1; finnSay(ST.FINN_LINES.low[0], ST.FINN_LINES.low[1], 1); } } else { alarmT = 0; if (fr > 0.12) lowFlag = 0; }
-  if (inM && !sh.dead) { if (fr < 0.5 && fr > 0.1 && !halfFlag) { halfFlag = 1; finnSay(ST.FINN_LINES.half[0], ST.FINN_LINES.half[1], 1); } if (fr > 0.58) halfFlag = 0; } else if (!inM) { halfFlag = 0; lowFlag = 0; }
+  if (inM) vPrefetch(); const low = inM && fr <= 0.1 && !sh.dead; $('alarmbar').classList.toggle('hide', !low);
+  if (low) { alarmT -= dt; if (alarmT <= 0) { alarmT = 1.0; tone(880, 0.42, 'sawtooth', 0.075, 600); tone(640, 0.42, 'square', 0.045, 440, null, 0.44); } if (!lowFlag) { lowFlag = 1; finnSay(ST.FINN_LINES.low[0], ST.FINN_LINES.low[1], 1, 'finn_low'); } } else { alarmT = 0; if (fr > 0.12) lowFlag = 0; }
+  if (inM && !sh.dead) { if (fr < 0.5 && fr > 0.1 && !halfFlag) { halfFlag = 1; finnSay(ST.FINN_LINES.half[0], ST.FINN_LINES.half[1], 1, 'finn_half'); } if (fr > 0.58) halfFlag = 0; } else if (!inM) { halfFlag = 0; lowFlag = 0; }
   const stn = inM && sh.st > 0 && !sh.dead; $('stun').classList.toggle('hide', !stn); $('stuntxt').classList.toggle('hide', !stn); if (stn) $('stuntxt').firstChild.nodeValue = '⚡ STUNNED ' + sh.st.toFixed(1) + 's';
+}
+// ----- v8: the player's character portrait, framed with their name, sitting on top of the hull panel (bottom-left). Falls back to the right of the panel when there is no room above it (short phone screens). -----
+const hpImgs = {};
+function hudPortrait(bx, by, bw, W, H, sh) {
+  const c = ST.CREW[me.role]; if (!c) return; let im = hpImgs[c.img]; if (!im) { im = hpImgs[c.img] = new Image(); im.src = portraitSrc(c.img); } if (!im.complete || !im.naturalWidth) return;
+  const ps = H < 560 ? 48 : 72, tw = 150, pTop = by - 24, topFree = H < 700 ? 150 : 138;
+  let x = bx - 8, y = pTop - ps - 8; if (y < topFree) { x = bx + bw + 16; y = pTop + 128 - ps; }   // no vertical room: dock beside the panel instead
+  const crit = sh.h / sh.hm <= 0.1 && !sh.dead, hurt = sh.st > 0, col = crit ? ((performance.now() / 200 | 0) % 2 ? '#ff5a5a' : '#ffb0b0') : hurt ? '#7fd0ff' : c.col;
+  cx.save(); cx.fillStyle = 'rgba(8,16,30,.72)'; cx.fillRect(x, y, ps + tw, ps + 4); cx.strokeStyle = 'rgba(110,170,230,.45)'; cx.lineWidth = 1; cx.strokeRect(x + .5, y + .5, ps + tw - 1, ps + 3);
+  cx.shadowColor = col; cx.shadowBlur = crit ? 14 : 8; cx.fillStyle = col; cx.fillRect(x + 1, y + 1, ps + 4, ps + 2); cx.shadowBlur = 0; cx.drawImage(im, x + 3, y + 3, ps, ps);
+  cx.fillStyle = 'rgba(4,8,16,.82)'; cx.fillRect(x + 3, y + 3 + ps - 15, ps, 15); cx.textAlign = 'center'; cx.font = 'bold 11px monospace'; cx.fillStyle = '#fff'; cx.fillText(c.name.split(' ')[0].toUpperCase(), x + 3 + ps / 2, y + 3 + ps - 4);
+  cx.textAlign = 'left'; cx.fillStyle = col; cx.font = 'bold 13px monospace'; cx.fillText(c.name, x + ps + 12, y + 20); cx.fillStyle = '#9ab'; cx.font = '11px monospace'; cx.fillText(c.role, x + ps + 12, y + 36); cx.fillText(c.animal + ' · ' + (c.sex === 'F' ? '♀' : '♂'), x + ps + 12, y + 50);
+  cx.restore();
 }
 // ----- drawing: stun arcs, commander names, ion bolts, boss bar -----
 function stunArcs(x, y, r) {

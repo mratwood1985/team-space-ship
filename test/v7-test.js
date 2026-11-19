@@ -20,7 +20,7 @@ const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() <
   let ok = true; const check = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!cond) ok = false; };
   // ---- static ----
   const html = fs.readFileSync(__dirname + '/../public/index.html', 'utf8'), readme = fs.readFileSync(__dirname + '/../README.md', 'utf8');
-  check(D.VERSION === 7 && ST.TITLE === 'Spacebelts Optional', 'v7, title "Spacebelts Optional"');
+  check(D.VERSION >= 7 && ST.TITLE === 'Spacebelts Optional', 'v7, title "Spacebelts Optional"');
   check(/<title>Spacebelts Optional<\/title>/.test(html) && html.includes('Zero safety standards') && readme.includes('Spacebelts Optional') && readme.includes('Zero safety standards'), 'rename + tagline on the page title, title/lobby screen and README');
   check(ST.CREW.length === 6 && ST.CREW.filter(c => c.sex === 'M').length === 3 && ST.CREW.filter(c => c.sex === 'F').length === 3, 'six crew: 3 male, 3 female');
   check(['Arctic Fox', 'Dragon', 'Basilisk Lizard', 'Kangaroo', 'Owl', 'Red Flying Squirrel'].every(a => ST.CREW.some(c => c.animal === a)), 'the six animals are all used');
@@ -84,6 +84,6 @@ const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() <
   dev({ op: 'ship', v: { x: 0, y: 0 } }); await sleep(300);
   check(E.evs.some(e => e[0] === 'cmd' && e[1] === 99 && e[2] === 0), 'villain boss intro event');
   clearInterval(tick); [E, R, S].forEach(c => c.ws.close());
-  const h = await (await fetch(BASE + '/health')).json(); check(h.v === 7, 'health reports v7');
+  const h = await (await fetch(BASE + '/health')).json(); check(h.v === D.VERSION, 'health reports ' + D.VERSION);
   console.log(ok ? 'V7 TESTS PASSED' : 'V7 TESTS FAILED'); process.exit(ok ? 0 : 1);
 })().catch(e => { console.error(e); process.exit(2); });

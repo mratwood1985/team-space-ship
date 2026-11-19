@@ -1,5 +1,5 @@
 'use strict';
-// Spacebelts Optional v7: server-authoritative co-op. Node + ws.
+// Spacebelts Optional v7.1: server-authoritative co-op. Node + ws.
 const http = require('http'), fs = require('fs'), path = require('path'), zlib = require('zlib'), crypto = require('crypto');
 const { WebSocketServer } = require('ws');
 const D = require('./public/defs.js'), ST = require('./public/story.js');
@@ -10,14 +10,14 @@ const PUB = path.join(__dirname, 'public');
 const DATA = path.join(__dirname, 'data'); fs.mkdirSync(DATA, { recursive: true });
 
 // ---------- static files ----------
-const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css', '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.json': 'application/json' };
+const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'application/javascript; charset=utf-8', '.css': 'text/css', '.png': 'image/png', '.webp': 'image/webp', '.jpg': 'image/jpeg', '.svg': 'image/svg+xml', '.json': 'application/json', '.mp3': 'audio/mpeg' };
 let files = {};
 function loadFiles() {
   const f2 = {};
   const walk = (dir, pre) => {
     for (const f of fs.readdirSync(dir)) {
       const p = path.join(dir, f), st = fs.statSync(p); if (st.isDirectory()) { walk(p, pre + f + '/'); continue; } if (!st.isFile()) continue;
-      const b = fs.readFileSync(p), bin = /\.(webp|png|jpg)$/.test(f);   // v7: portraits live in public/img/*.webp (already compressed: no gzip)
+      const b = fs.readFileSync(p), bin = /\.(webp|png|jpg|mp3)$/.test(f);   // v7: portraits live in public/img/*.webp (already compressed: no gzip)
       f2['/' + pre + f] = { raw: b, gz: bin ? null : zlib.gzipSync(b, { level: 9 }), bin, type: MIME[path.extname(f)] || 'application/octet-stream', etag: '"' + crypto.createHash('md5').update(b).digest('hex').slice(0, 12) + '"' };
     }
   };
@@ -1233,7 +1233,7 @@ function start() {
     for (const [code, r] of rooms) if (code !== 'PUBLIC' && !r.clients.size && Date.now() - r.emptySince > (r.pub ? 60e3 : 15 * 60e3)) rooms.delete(code);
   }, 1000 / 60);
   if (process.env.WATCH) fs.watch(PUB, () => { try { loadFiles(); } catch (e) { } });
-  server.listen(PORT, () => console.log('Spacebelts Optional v7 on :' + PORT));
+  server.listen(PORT, () => console.log('Spacebelts Optional v7.1 on :' + PORT));
 }
 if (require.main === module) start();
 module.exports = { Room, buy, botSpend, rooms };

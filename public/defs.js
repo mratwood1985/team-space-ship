@@ -1,7 +1,7 @@
-// Spacebelts Optional v7: shared game data for the server (require) and the client (window.DEFS)
+// Spacebelts Optional v7.1: shared game data for the server (require) and the client (window.DEFS)
 (function (root) {
 const PI = Math.PI;
-const VERSION = 7;
+const VERSION = 7.1;
 const ARENA = 4200;                       // half-size of the mission map (v4: was 3200)
 const EFIRE_WEAK_LV = 5, EFIRE_WEAK = 0.6; // enemy fire does 60% damage on mission levels 1-5, full from level 6
 const REPAIR_CFG = { base: 20, drone: 1.5, mgMax: 1.0, clickDiv: 300, botCps: 1.5 }; // repair: base seconds per section, drone-off speed multiplier, minigame max bonus, click strength on the Repair Bay

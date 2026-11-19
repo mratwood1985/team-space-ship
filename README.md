@@ -20,11 +20,20 @@ npm test           # websocket integration test against localhost:8080
 ## Files
 - `server.js`: server-authoritative sim (30 Hz, 15 Hz snapshots), bots, missions, rooms, websocket + static server
 - `public/story.js`: title, tagline, crew, races, commanders, villain, chapters, cutscene and comm lines (shared by server and client)
+- `public/voice/`: 112 voice clips (see v7.1); `tools/`: voice manifest + generator
 - `public/img/`: 13 WebP portraits (192x192, ~95 KB in total)
 - `public/defs.js`: shared game data (roles, skill pyramids, abilities, ship geometry per Mk, ports, enemies, missions, planet kinds), loaded by server and client
 - `public/game.js`, `public/index.html`: Canvas 2D client, procedural art (ships, enemies, noise-lit planets), WebAudio SFX/music, HUD, touch controls
 - `test/ws-test.js`: integration test (`npm test`; run the server with `DEV_TOOLS=1` to also exercise purchases, ports, Mk upgrades and spawned enemies)
 - `test/shot-v3.js`: staged headless screenshots (ship tiers, shield arc, pyramid, docks, planets); `test/shot-flow.js`: play-through screenshots incl. mobile (need Chrome + puppeteer-core)
+
+## v7.1: human voices + HUD portrait
+- **Prerecorded neural voices** (`public/voice/*.mp3`, 112 clips, ~1.3 MB, mono 24 kHz / 24 kbps MP3). Generated on a box with **edge-tts** (Microsoft neural voices, free, no key) by `tools/voice-manifest.js | python3 tools/gen-voice.py`, then a light radio filter (gentle band limit + soft compression). Lazy-loaded on first use (the Finn callouts are prefetched when the first mission starts) and played through WebAudio, so they follow the game volume and mute.
+- **Voices:** Finn en-US-Andrew (warm, friendly, natural rate, no pitch-down); Skids en-US-Emma; Boomer en-AU-William; Mort en-US-Eric; Ophelia en-GB-Libby; Ember en-US-Jenny; Tavi en-US-Ana; Ishkara en-AU-Natasha; Command en-US-Roger (tinny radio); Kraal en-US-Guy; Durmok en-GB-Thomas; Grakk en-CA-Liam; Admiral Sskarra en-GB-Sonia; lieutenants en-US-Steffan. **Szarkath:** the deepest authoritative neural voice available (en-US-Christopher, lowest pitch of every English male voice), slowed 14%, pitched down ~3 semitones with formant-shifting (rubberband) to ~90 Hz, low shelf + a touch of reverb. Not a clone of anyone.
+- **Voiced:** Finn's "<station/port> is down" (every station and port name), "Hull at fifty percent", "Hull critical"; all 13 villain taunts, 5 reinforcement lines, 4 boss lines; each named commander's intro and death line (lieutenants: all 10); Tavi/Ishkara comms; and the short (65 characters or fewer) cutscene lines of the crew, cats, commanders and villain. Longer cutscene lines stay text-only.
+- **Fallback** (no clip, or it failed to load): speechSynthesis with the most natural installed voice (names with Natural / Neural / Online / Google first), pitch 1, rate 1. Rate limits (7.5 s, 3 s urgent) and the below-10% hull alarm are unchanged. A first callout within 7.5 s of page load is no longer swallowed.
+- **HUD portrait:** your character's framed portrait with name, role and animal sits on top of the hull panel (bottom-left); it docks beside the panel on short screens and the crew list hides on short landscape phones. `/health` reports `v:7.1`.
+- Tests: `test/voice-test.js` (needs `DEV_TOOLS=1` + Chrome), `test/shot-hud.js` (HUD screenshots).
 
 ## What is new in v7 (update number 6): Spacebelts Optional
 The game is now **Spacebelts Optional** (title screen, lobby, page title, this README). `/health` reports `v:7`.

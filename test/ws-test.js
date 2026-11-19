@@ -18,7 +18,7 @@ function client(room, name, role) {
 async function until(fn, ms) { const d = Date.now() + ms; while (Date.now() < d) { if (fn()) return true; await sleep(200); } return false; }
 (async () => {
   let ok = true; const check = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!cond) ok = false; };
-  const h0 = await (await fetch(BASE + '/health')).json(); console.log('health', h0); check(h0.v === D.VERSION && D.VERSION === 7, 'health reports v5');
+  const h0 = await (await fetch(BASE + '/health')).json(); console.log('health', h0); check(h0.v === D.VERSION && D.VERSION >= 7, 'health reports current version');
   const t0 = Date.now(); const a = await client('', 'Alice', 0); check(a.me.role === 0 && a.me.pub, `public join as Pilot in ${Date.now() - t0}ms (room ${a.me.code})`);
   await sleep(2500);
   check(a.snaps > 25, `snapshots streaming: ${a.snaps} in 2.5s`);
@@ -107,7 +107,7 @@ async function until(fn, ms) { const d = Date.now() + ms; while (Date.now() < d)
   check((a.evs.b || 0) > 20, `lasers fired (public): ${a.evs.b}`); check((a.evs.boom || 0) >= 2, `explosions: ${a.evs.boom}`);
   console.log('private event counts:', JSON.stringify(b.evs));
   d.ws.close(); await sleep(800); check(c.last.crew[4][1] === 1, 'Dan left -> bot took the Shield seat');
-  const h = await (await fetch(BASE + '/health')).json(); console.log('health', h); check(h.v === 7, 'health reports v5');
+  const h = await (await fetch(BASE + '/health')).json(); console.log('health', h); check(h.v === D.VERSION, 'health reports ' + D.VERSION);
   a.ws.close(); b.ws.close(); c.ws.close();
   console.log(ok ? 'ALL TESTS PASSED' : 'SOME TESTS FAILED'); process.exit(ok ? 0 : 1);
 })().catch(e => { console.error(e); process.exit(1); });

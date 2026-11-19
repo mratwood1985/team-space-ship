@@ -93,6 +93,12 @@ const FINN_LINES = {
 // story helpers
 const chapterOf = n => n >= 1 && n <= 12 ? CHAPTERS[n] : null;
 const SEQ12 = CHAPTERS.slice(1).map(c => c.type);
-const out = { TITLE, TAGLINE, SHIP, CREW, RACES, CMDRS, LTS, cmdInfo, VILLAIN, CATS, WHO, CHAPTERS, EPILOGUE, TAUNTS, SENDS, CAT_COMMS, CMD_INTRO, CMD_DEATH, BOSS_LINES, FINN_LINES, chapterOf, SEQ12 };
+// v7.1 voices (public/voice/*.mp3): the clip id of a cutscene line (only short lines are voiced, long ones stay text-only), and which fixed commander line each named commander says
+const VOICE_MAX = 65;
+const csId = (ch, k, i) => 'cs_' + ch + '_' + k + '_' + i;
+const csLines = () => { const L = []; for (let c = 1; c <= 12; c++) for (const k of ['pre', 'post']) (CHAPTERS[c][k] || []).forEach((l, i) => L.push([csId(c, k, i), l[0], l[1]])); EPILOGUE.forEach((l, i) => L.push([csId('ep', 'e', i), l[0], l[1]])); return L; };
+const CMD_INTRO_BY = { kraal: 0, durmok: 1, grakk: 3, sskarra: 4 }, CMD_DEATH_BY = { kraal: 4, durmok: 0, grakk: 1, sskarra: 3 };
+const cmdLine = (key, kind, r) => { const by = kind === 'i' ? CMD_INTRO_BY : CMD_DEATH_BY, n = kind === 'i' ? CMD_INTRO.length : CMD_DEATH.length; return key in by ? by[key] : (r || 0) % n; };
+const out = { VOICE_MAX, csId, csLines, CMD_INTRO_BY, CMD_DEATH_BY, cmdLine, TITLE, TAGLINE, SHIP, CREW, RACES, CMDRS, LTS, cmdInfo, VILLAIN, CATS, WHO, CHAPTERS, EPILOGUE, TAUNTS, SENDS, CAT_COMMS, CMD_INTRO, CMD_DEATH, BOSS_LINES, FINN_LINES, chapterOf, SEQ12 };
 if (typeof module !== 'undefined' && module.exports) module.exports = out; else root.STORY = out;
 })(typeof window !== 'undefined' ? window : globalThis);
