@@ -27,6 +27,12 @@ npm test           # websocket integration test against localhost:8080
 - `test/ws-test.js`: integration test (`npm test`; run the server with `DEV_TOOLS=1` to also exercise purchases, ports, Mk upgrades and spawned enemies)
 - `test/shot-v3.js`: staged headless screenshots (ship tiers, shield arc, pyramid, docks, planets); `test/shot-flow.js`: play-through screenshots incl. mobile (need Chrome + puppeteer-core)
 
+## What is new in v10 (update number 9)
+- **Ports can be destroyed again.** A v8 typo in `emerg()` called itself when a section hit 0 HP, which crashed the sim tick and left every port (stations and the v8/v9 extra ports) un-destroyable in combat. The Repair Bay still starts a repair when you click a damaged port; the per-port minigame and a recalled drone (+50%) still speed it up; other players still get **CLICK RAPIDLY** when the Repair Bay itself is down. Destroyed ports still show fire on the hull and health in the repair panel.
+- **Engine reroute also turns the ship faster** (about +3% turn rate per engine slot). The engineer label now says so.
+- **Shield reroute** already raised shield HP and regen and sped up the 20 s reboot; it now also shortens the ion bolt cooldown (about +6% per shield slot). The engineer label spells out HP, regen, the 20 s reboot and ion recharge.
+- **Energy Siphon:** a new uncapped shield upgrade. Each level turns more of the lasers and ion bolts your shield blocks into energy for the engineer's reroute pool. A yellow "+N ⚡" popup appears on the block, and the engineer energy bar flashes.
+
 ## What is new in v9 (update number 8)
 - **Fresh runs:** every new run (a new ship, or a restart) starts every player at **0 credits** with a blank skill pyramid. Reconnecting to the same running ship keeps your progress.
 - **Ship browser:** LAUNCH opens a list of the ships flying right now (players, names, level, phase) with Join, **Create a new ship** and Join the public ship. Invite links (`?room=` / `?ship=`) skip it.

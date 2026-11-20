@@ -24,7 +24,7 @@ function client(room, name, role) {
 const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() < d) { if (fn()) return true; await sleep(100); } return false; };
 (async () => {
   // ---------- static ----------
-  check(D.VERSION === 9, 'VERSION 9');
+  check(D.VERSION >= 9, 'version is 9 or newer (' + D.VERSION + ')');
   const RC = D.RR_CFG; check(RC.drain[10] >= 12 && RC.drain[5] >= 3.5 && RC.drain[1] === 1, `item 4: steeper reroute drain (5 slots ${(RC.base * RC.drain[5]).toFixed(1)}/s, 10 slots ${(RC.base * RC.drain[10]).toFixed(1)}/s; v8 was 5.5 / 18.9)`);
   check(D.HAZ.rad.dps >= 1.2, `item 3: radiation hull damage ${D.HAZ.rad.dps}/s (v8: 0.6)`);
   for (const t of ['pilot', 'engineer', 'shield', 'repair']) {
@@ -110,7 +110,7 @@ const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() <
     const rp = new Room('V9B2', false), cp = mkC('R'); rp.addClient(cp, REPAIR); const h0 = rp.secMax(0); rp.mk = 3; rp.resetShip(); cp.prof.cr = 1e6; rp.buyPort(cp.prof, REPAIR, 2, 'bulk'); check(rp.secMax(0) > h0, `Reinforced Bulkheads: station HP ${h0} -> ${rp.secMax(0)}`);
   }
   // ---------- live ----------
-  const h = await (await fetch(BASE + '/health')).json(); check(h.v === 9, '/health shows v 9');
+  const h = await (await fetch(BASE + '/health')).json(); check(h.v >= 9, '/health shows v 9+ (' + h.v + ')');
   const code = 'V9' + Math.random().toString(36).slice(2, 5).toUpperCase();
   const a = await client(code, 'Ada', 0); await sleep(800);
   check(a.me.cr === 0 && a.last.ph === 'lobby', `live: new ship ${code} opens in the lobby, Ada has ${a.me.cr} credits`);

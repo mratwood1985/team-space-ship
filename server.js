@@ -160,9 +160,9 @@ class Room {
   thrDrain() { const s = this.ship; if (!s || s.sec[ENG].dn || s.thr <= THR_FREE) return 0; return THR_DRAIN * Math.pow((s.thr - THR_FREE) / (1 - THR_FREE), 1.15) * max(0.3, 1 - 0.3 * this.portEff(ENG, 'coolant') - this.pu(ENG, 'coolant', 'thr')); }   // v9: energy/s taken by throttle above 40%
   strafeM() { return 1 + this.S(PILOT, 'strafe') + 0.4 * this.portEff(PILOT, 'gyro') + this.pu(PILOT, 'gyro', 'strafe'); }   // v9 Strafe Thrusters upgrade (no cap) + Gyro port   // v8: energy drain multiplier (Efficient Routing + Surge Coupler)
   shDr() { return min(0.6, RR_CFG.shDr * this.rrLv(2) * this.pe() + this.pu(SHIELD, 'ablate', 'shock')); }
-  emerg() { return this.emerg() + 0.2 * this.portEff(REPAIR, 'foam') + this.pu(REPAIR, 'foam', 'restart'); }
+  emerg() { return this.S(REPAIR, 'emerg') + 0.2 * this.portEff(REPAIR, 'foam') + this.pu(REPAIR, 'foam', 'restart'); }   // v10: was recursively calling itself, so a section hitting 0 HP threw and never went down
   ionCost() { return ION_COST * max(0.3, 1 - 0.25 * this.portEff(SHIELD, 'ioncap') - this.pu(SHIELD, 'ioncap', 'cost')); }
-  ionCdM() { return max(0.3, 1 - 0.3 * this.portEff(SHIELD, 'ioncap') - this.pu(SHIELD, 'ioncap', 'cd')); }
+  ionCdM() { return max(0.3, 1 - 0.3 * this.portEff(SHIELD, 'ioncap') - this.pu(SHIELD, 'ioncap', 'cd') - RR_CFG.ion * this.rrLv(2) * this.pe()); }   // v10: shield reroute also shortens the ion bolt cooldown
   rrUsed() { const P = this.ship.pip; return P[0] + P[1] + P[2] + P[3]; }
   ev(...a) { this.events.push(a); }
   grant(v) { // credits are equal for every crew member
@@ -576,7 +576,7 @@ class Room {
     if (this.portEff(ENG, 'emp') > 0) { s.empT = (s.empT == null ? 4 : s.empT) - DT; if (s.empT <= 0) { const rg = 300 * (1 + this.pu(ENG, 'emp', 'range')) * (this.portEff(ENG, 'emp') > 1 ? 1.1 : 1), dur = 1.6 * (1 + this.pu(ENG, 'emp', 'dur')); let n = 0; for (const e of this.enemies) if (!e.dead && !(e.imm > 0) && d2(e, s) < rg * rg) { e.stun = max(e.stun || 0, e.boss ? dur * 0.4 : dur); n++; } if (n) { this.ev('emp', round(s.x), round(s.y), round(rg)); s.empT = 14 * (1 - this.pu(ENG, 'emp', 'rate')); } else s.empT = 0.5; } }
     // helm: pilot only. Cockpit destroyed => the ship keeps its heading, no steering at all
     if (this.can(PILOT) && !stn) {
-      const turn = 1.7 * (1 - 0.1 * mk) * (1 + this.S(PILOT, 'turn')) * (this.bf(PILOT, 'stim') ? 1.4 : 1) * (1 + 0.25 * this.portEff(PILOT, 'gyro') + this.pu(PILOT, 'gyro', 'turn'));
+      const turn = 1.7 * (1 - 0.1 * mk) * (1 + this.S(PILOT, 'turn')) * (this.bf(PILOT, 'stim') ? 1.4 : 1) * (1 + 0.25 * this.portEff(PILOT, 'gyro') + this.pu(PILOT, 'gyro', 'turn')) * (1 + RR_CFG.turn * this.rrLv(0) * this.pe());   // v10: engine reroute also turns the ship faster
       const dx = P.ax - s.x, dy = P.ay - s.y; if (dx * dx + dy * dy > 900) s.a = wrap(s.a + clamp(wrap(atan2(dy, dx) - s.a), -turn * DT, turn * DT));
     }
     // speed: engineer only. Engines destroyed => slow stall to zero
@@ -1099,7 +1099,8 @@ class Room {
   }
   shieldHit(b) {
     const s = this.ship, dmg = (b.sd || 1) * (s.fort > 0 ? 0.5 : 1) * (s.bubble > 0 ? 0.5 : 1) * (1 - this.shDr()); s.shp -= dmg; s.shHit = 0;
-    s.en = min(s.em, s.en + (b.hv ? 4 : 2) * (1 + this.S(SHIELD, 'absorb')));
+    // v10: blocked lasers (t=0) and ion bolts (t=3) (and other blocked shots) feed the engineer's energy pool; Energy Siphon / Absorber increase the yield
+    { const gain = (b.hv ? 4 : 2) * (1 + this.S(SHIELD, 'absorb')); if (gain > 0 && s.en < s.em) { const got = min(s.em - s.en, gain); s.en += got; this.ev('enabs', round(b.x), round(b.y), Math.round(got * 10) / 10); } }
     this.ev('blk', round(b.x), round(b.y), b.t); if (b.t === 3) this.ev('ionb', round(b.x), round(b.y));
     const refl = this.S(SHIELD, 'reflect') + (this.portEff(SHIELD, 'reflect') > 0 ? 0.25 + this.pu(SHIELD, 'reflect', 'chance') : 0);
     if (b.t === 0 && random() < refl) this.addBolt(b.x, b.y, atan2(-b.vy, -b.vx), 700, 1.6 * (1 + this.pu(SHIELD, 'reflect', 'rdmg')), 0, 1, 0.9);

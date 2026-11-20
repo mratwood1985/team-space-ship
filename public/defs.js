@@ -1,14 +1,14 @@
-// Spacebelts Optional v9: shared game data for the server (require) and the client (window.DEFS)
+// Spacebelts Optional v10: shared game data for the server (require) and the client (window.DEFS)
 (function (root) {
 const PI = Math.PI;
-const VERSION = 9;
+const VERSION = 10;
 const ARENA = 4200;                       // half-size of the mission map (v4: was 3200)
 const EFIRE_WEAK_LV = 5, EFIRE_WEAK = 0.6; // enemy fire does 60% damage on mission levels 1-5, full from level 6
 const REPAIR_CFG = { base: 20, drone: 1.5, mgMax: 1.0, clickDiv: 300, botCps: 1.5 }; // repair: base seconds per section, drone-off speed multiplier, minigame max bonus, click strength on the Repair Bay
 const MONEY_MULT = 1.1;                   // v5: about 10% more credits for everyone
 // v5 power rerouting (Engineer): 10 slots in total over 4 options. Drain per second = base * DRAIN[slots used]; the generator regenerates `base` per second at the start (= exactly 1 slot).
 const RR_CFG = { max: 10, base: 2.0, drain: [0, 1, 1.75, 2.3, 3.0, 3.9, 5.0, 6.4, 8.1, 10.2, 12.8], regenCap: 3.0, lock: 20, lockThr: 0.25,
-  eng: 0.0225, acc: 0.12, wpn: 0.075, shd: 0.15, rep: 0.045, shHp: 0.15, shDr: 0.05 };   // v8: every filled square is 1.5x stronger but drains 1.35x more energy (see drain[]); Conduits / Efficient Routing / the Surge Coupler port improve the deal
+  eng: 0.0225, acc: 0.12, turn: 0.03, wpn: 0.075, shd: 0.15, rep: 0.045, shHp: 0.15, shDr: 0.05, ion: 0.06 };   // v8: every filled square is 1.5x stronger but drains 1.35x more energy. v10: turn = pilot turn rate per engine slot; ion = ion-bolt recharge per shield slot
    // v6: steeper drain curve (10 slots = 14/s). shd = recharge speed per slot; shHp = +max shield HP per slot; shDr = shield damage reduction per slot    // per slot: top speed, throttle response, gun fire rate, shield recharge speed, repair speed
 const RR_NAMES = ['ENGINES', 'WEAPONS', 'SHIELDS', 'REPAIR'];
 const ION_STUN = 3, ION_COST = 1.5, ION_CD = 7;   // v7: stun seconds; shield-player ion bolt: shield HP it costs, cooldown
@@ -148,7 +148,7 @@ const TREES = {
     [N('s_mirror2', 'Mirror Field', { reflect: 0.15 }), N('s_dense', 'Dense Field', { shHp: 3, shArc: 5 }), N('s_focus', 'Lance Focus', { lanceDmg: 0.5, shHp: 1 }), N('s_overflow', 'Overflow', { absorb: 0.4, shRegen: 0.1 })],
     [N('s_aegis', 'Aegis Link', {}, 'aegis'), N('s_nova', 'Nova Lance', {}, 'nova'), N('s_reboot', 'Emergency Reboot', {}, 'reboot')],
     [N('s_bastion', 'Bastion', { shHp: 6, shArc: 15, shRegen: 0.2 }), N('s_warden', 'Warden of the Fleet', { reflect: 0.25, lanceDmg: 1, buff: 3, shHp: 2 })]],
-    inf: [['i_arc', 'Arc Emitter', 'shArc', 5], ['i_shp', 'Field Capacitor', 'shHp', 0.5], ['i_spin', 'Gyro Trim', 'shSpin', 0.03]],
+    inf: [['i_arc', 'Arc Emitter', 'shArc', 5], ['i_shp', 'Field Capacitor', 'shHp', 0.5], ['i_spin', 'Gyro Trim', 'shSpin', 0.03], ['i_siphon', 'Energy Siphon', 'absorb', 0.25]],   // v10: no cap; blocked lasers and ion bolts feed the engineer energy pool
     big: [['b_armor', 'Hardened Generator', 'Deflector section +1 HP', 450, 0, {}], ['b_cap', 'Capacitor Array', '+4 shield HP', 700, 1, { shHp: 4 }]],
     ports: [['rear', 'Rear Emitter', 'A second shield arc (60% width) always faces opposite yours'], ['reflect', 'Reflector Grid', '+25% chance blocked lasers bounce back as red bolts'], ['capbank', 'Capacitor Bank', '+3 shield HP and faster shield regen'], ['arclens', 'Arc Lens', 'The main shield arc is 25% wider'], ['ioncap', 'Ion Capacitor', 'Ion bolts cost less shield HP and recharge faster'], ['ablate', 'Ablative Plating', 'Hits that get through the shield do 15% less damage to the hull']] },
   repair: { name: 'Repair', rows: [
