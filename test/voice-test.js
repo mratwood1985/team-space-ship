@@ -9,15 +9,15 @@ let ok = true; const check = (c, m) => { console.log((c ? 'PASS ' : 'FAIL ') + m
   const man = JSON.parse(require('child_process').execSync('node ' + path.join(__dirname, '../tools/voice-manifest.js')).toString()), dir = path.join(__dirname, '../public/voice');
   const miss = man.filter(c => !fs.existsSync(path.join(dir, c.id + '.mp3'))); const total = fs.readdirSync(dir).reduce((a, f) => a + fs.statSync(path.join(dir, f)).size, 0);
   check(!miss.length, `${man.length} voiced lines, all clips present` + (miss.length ? ' (missing ' + miss.slice(0, 5).map(m => m.id) + ')' : ''));
-  check(total < 1.5e6, `clips total ${(total / 1024).toFixed(0)} KB (< 1.5 MB)`);
+  check(total < 1.9e6, `clips total ${(total / 1024).toFixed(0)} KB (< 1.9 MB; v9 added variants)`);
   const slug = n => String(n).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
-  check(['half', 'low'].every(k => fs.existsSync(path.join(dir, 'finn_' + k + '.mp3'))) && !D.PORT_NAMES.some(n => fs.existsSync(path.join(dir, 'finn_' + slug(n) + '.mp3'))), 'v8: Finn keeps only the hull 50% / critical calls (no spoken "port destroyed" clips any more)');
+  check(['half', 'low'].every(k => ST.FINN_VAR[k].length >= 3 && ST.FINN_VAR[k].every((_, i) => fs.existsSync(path.join(dir, 'finn_' + k + '_' + i + '.mp3')))) && ST.CARE_VAR.every((_, i) => fs.existsSync(path.join(dir, 'cat_care_' + i + '.mp3'))) && fs.existsSync(path.join(dir, 'mort_thr.mp3')) && !D.PORT_NAMES.some(n => fs.existsSync(path.join(dir, 'finn_' + slug(n) + '.mp3'))), 'v9: Finn hull 50% / critical calls have 3-4 voiced variants each, care package 3, throttle tip voiced; v8: Finn keeps only the hull calls (no spoken "port destroyed" clips any more)');
   check(['rad', 'cold', 'well'].every(k => fs.existsSync(path.join(dir, 'pz_' + k + '.mp3'))) && ST.INTRO.every((_, i) => fs.existsSync(path.join(dir, ST.csId('intro', 'i', i) + '.mp3'))), 'v8: the pilot hazard briefings and the arrival cutscene lines are voiced');
   check(ST.TAUNTS.every((_, i) => fs.existsSync(path.join(dir, 'vt' + i + '.mp3'))) && ST.SENDS.every((_, i) => fs.existsSync(path.join(dir, 'vs' + i + '.mp3'))) && ['open', 'p2', 'p3', 'kill'].every(k => fs.existsSync(path.join(dir, 'vb_' + k + '.mp3'))), 'Szarkath: every taunt, reinforcement line and boss line');
   check(['kraal', 'durmok', 'grakk', 'sskarra'].every(w => fs.existsSync(path.join(dir, 'ci_' + w + '.mp3')) && fs.existsSync(path.join(dir, 'cd_' + w + '.mp3'))) && ST.CMD_INTRO.every((_, i) => fs.existsSync(path.join(dir, 'ci_lt' + i + '.mp3'))) && ST.CMD_DEATH.every((_, i) => fs.existsSync(path.join(dir, 'cd_lt' + i + '.mp3'))), 'commanders: own intro + death line each, lieutenants have a full set');
   const short = ST.csLines().filter(l => l[2].length <= ST.VOICE_MAX); check(short.length > 30 && short.every(l => fs.existsSync(path.join(dir, l[0] + '.mp3'))), `${short.length} short cutscene lines voiced by the crew / cats / commanders (long ones stay text-only)`);
   check(['skids', 'boomer', 'finn', 'mort', 'ophelia', 'ember', 'tavi', 'ishkara', 'szarkath'].every(w => man.some(c => c.who === w)), 'every in-mission and short-cutscene speaker has a voice');
-  const mime = (await fetch(URL + 'voice/finn_half.mp3')); check(mime.ok && /audio\/mpeg/.test(mime.headers.get('content-type')), 'server serves clips as audio/mpeg');
+  const mime = (await fetch(URL + 'voice/finn_half_0.mp3')); check(mime.ok && /audio\/mpeg/.test(mime.headers.get('content-type')), 'server serves clips as audio/mpeg');
   // ---- browser
   const b = await puppeteer.launch({ executablePath: process.env.CHROME || '/usr/bin/google-chrome', headless: 'new', args: ['--no-sandbox', '--autoplay-policy=no-user-gesture-required'] });
   async function run(block) {

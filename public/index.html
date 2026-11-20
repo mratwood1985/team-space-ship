@@ -172,6 +172,18 @@ body.touch #buffs{bottom:auto;top:116px}
 .nd.warn{border-color:#f55;color:#ffb0b0;background:rgba(60,10,10,.85)}
 @media (max-width:700px){.pyr{grid-template-columns:repeat(12,1fr)}.pn{font-size:9px;padding:3px;min-height:64px}.pn small .fxe{display:none}.pn small .fxl{font-size:9px}}
 @media (max-height:480px){#crew{display:none}}
+/* v9 */
+#browser{inset:0;z-index:60;overflow:auto;background:radial-gradient(ellipse at 50% 20%,#14224a,#02040a);padding:22px 12px;text-align:center}
+#browser h1{font-size:clamp(22px,4vw,34px);color:#ffd54a;letter-spacing:.14em}#browser .lsub{color:#9bd;margin:4px auto 14px;max-width:640px;font-size:13px}
+#brlist{max-width:760px;margin:0 auto;display:flex;flex-direction:column;gap:8px}
+.brr{display:flex;align-items:center;gap:12px;text-align:left;background:rgba(20,30,60,.85);border:1px solid #3a5a9a;border-radius:10px;padding:10px 14px}
+.brr .bri{flex:1}.brr b{color:#fff}.brr button{font-size:16px;padding:8px 18px}.brn{padding:18px;border:1px dashed #3a5a9a;border-radius:10px}
+.brbtn{display:flex;gap:10px;justify-content:center;flex-wrap:wrap;margin:16px 0 8px}.brbtn button{font-size:16px;padding:10px 18px}
+#rvote{position:fixed;top:64px;left:50%;transform:translateX(-50%);z-index:70;background:rgba(18,22,40,.96);border:2px solid #ffd54a;border-radius:12px;padding:10px 16px;max-width:520px;width:calc(100% - 24px);text-align:center;font-size:14px;box-shadow:0 0 24px rgba(255,213,74,.35)}
+#rvote .rvh{color:#ffd54a;font-weight:bold;letter-spacing:.12em;margin-bottom:4px}#rvote .rvc{margin:6px 0;font-size:15px}#rvote .rvb{display:flex;gap:10px;justify-content:center}#rvote .rvb button{font-size:16px;padding:8px 16px}#rvote button.mini{font-size:12px;padding:2px 8px}
+.thrinfo{font-size:12px;margin-top:4px;padding:3px 6px;border-radius:6px;cursor:help}.thrinfo.hot{background:rgba(255,120,40,.18);color:#ffb070;border:1px solid #f84}.thrinfo.cool{background:rgba(80,255,120,.08);color:#9f9;border:1px solid #3a6}
+.bar{position:relative}.thr40{position:absolute;left:40%;top:-2px;bottom:-2px;width:2px;background:#f84}.thrmark{position:absolute;top:-4px;bottom:-4px;width:3px;margin-left:-1px;background:#fff;box-shadow:0 0 4px #fff;transition:left .1s linear}
+.ab.strafeh{border-color:#ffd54a;color:#ffe9a0}
 </style></head><body>
 <canvas id="c"></canvas>
 <div id="intro" class="ov"><div class="wrap"><div class="left">
@@ -193,6 +205,8 @@ body.touch #buffs{bottom:auto;top:116px}
 <h3>The sector</h3>
 <div class="races" id="races"></div>
 </div></div></div>
+<div id="browser" class="ov hide"><div class="brw"><h1>SHIP BROWSER</h1><div class="lsub">Ships flying right now. Join one (a bot hands you its seat), or create a new ship. Next you pick your character in the ship lobby.</div>
+<div id="brlist"></div><div class="brbtn"><button id="brnew">＋ Create a new ship</button><button id="brpub">🌐 Join / start the public ship</button><button id="brback">◀ Back</button></div><div class="small">The list refreshes every few seconds. A ship with no players left is removed after 45 s.</div></div></div>
 <div id="top" class="ov hide"><div><div id="mi"></div><div id="crew"></div></div>
 <div id="btns"><button id="b-menu">☰ Menu (Esc)</button><button id="b-inv">🔗 Invite</button><button id="b-role">⇄ Role (Tab)</button><button id="b-up">★ Upgrades (U)</button><button id="b-help">? (H)</button><button id="b-mute">🔊</button><button id="b-mus">♪</button></div></div>
 <div id="abar" class="ov hide"></div>
@@ -201,7 +215,7 @@ body.touch #buffs{bottom:auto;top:116px}
 <div class="rrbarw"><div class="rrbar"><i id="rrbar"></i><span id="rrenv"></span></div></div><div id="rrnet" class="rrnet"></div><div id="rrlock" class="hide"></div>
 <div id="rrrows"></div>
 <div class="rrf"><button id="rrclear">clear all (C)</button><span class="small">1-4 add a slot · Shift+1-4 remove · 10 slots max in total · bonuses drain energy</span></div>
-<div class="thrb"><button id="thr-">− ↓</button><div class="bar"><i id="thrbar"></i></div><button id="thr+">↑ +</button></div><div class="small" id="thrt" style="margin-top:3px"></div></div></div>
+<div class="thrb"><button id="thr-">− ↓</button><div class="bar"><i id="thrbar"></i><span class="thr40" title="40%: above this the throttle drains power"></span><span id="thrmark" class="thrmark" title="actual engine output"></span></div><button id="thr+">↑ +</button></div><div class="small" id="thrt" style="margin-top:3px"></div><div id="thrinfo" class="thrinfo cool" title="The engines spool up slowly toward the throttle you set. Throttle at or below 40% is free. Above 40% it drains the reroute power pool, more the higher it is (about 3.2 power/s at 100%). The Coolant Loop port lowers this drain.">✓ Throttle at 40% or below: no power drain</div></div></div>
 <div id="repp" class="ov hide"><h3>🔧 REPAIR BAY · ship status</h3>
 <div id="hullrow"><span class="hn">SHIP HULL</span><div class="hb"><i id="hbi"></i></div><b id="hbt"></b></div>
 <div id="repmsg"></div><div id="hlist"></div>
@@ -215,7 +229,7 @@ body.touch #buffs{bottom:auto;top:116px}
 <div id="banner" class="ov"></div>
 <div id="dlg" class="ov hide"></div>
 <div id="comm" class="ov hide"></div><div id="feed" class="ov hide"></div>
-<div id="menu" class="ov hide"></div><div id="lobby" class="ov hide"></div>
+<div id="menu" class="ov hide"></div><div id="rvote" class="hide"></div><div id="lobby" class="ov hide"></div>
 <div id="stun" class="ov hide"></div><div id="stuntxt" class="ov hide">⚡ STUNNED<small>no fire · no steering · thrust at minimum</small></div>
 <div id="alarmbar" class="ov hide"></div>
 <div id="mm" class="ov hide"></div>

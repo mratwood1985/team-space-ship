@@ -11,7 +11,7 @@ function client(room, name, role) {
     const ws = new WebSocket(wsUrl); const c = { ws, me: null, snaps: 0, last: null, evs: {}, abs: [], phases: [], toasts: [] };
     c.send = o => ws.send(JSON.stringify(o));
     ws.on('open', () => c.send({ t: 'join', name, cid: 'test-' + name + Date.now(), room, role }));
-    ws.on('message', d => { const m = JSON.parse(d); if (m.t === 'me') { c.me = m; res(c); } if (m.t === 'toast') c.toasts.push(m.m); if (m.t === 's' && m.ph === 'lobby' && !c._st) { c._st = 1; c.send({ t: 'start' }); } if (m.t === 's' && m.ph === 'intro' && !c._rd) { c._rd = 1; c.send({ t: 'ready' }); } if (m.t === 's') { c.snaps++; c.last = m; if (c.phases[c.phases.length - 1] !== m.ph) c.phases.push(m.ph); for (const e of m.ev) { c.evs[e[0]] = (c.evs[e[0]] || 0) + 1; if (e[0] === 'ab') c.abs.push(e[2]); } } });
+    ws.on('message', d => { const m = JSON.parse(d); if (m.t === 'me') { c.me = m; res(c); } if (m.t === 'toast') c.toasts.push(m.m); if (m.t === 's' && m.ph === 'lobby' && !c._st) { c._st = 1; c.send({ t: 'start' }); } if (m.t === 's' && m.ph === 'intro' && !c._rd) { c._rd = 1; c.send({ t: 'ready' }); } if (m.t === 's' && c.auto && c.me && (m.wait || []).includes(c.me.name) && !c._aw) { c._aw = 1; setTimeout(() => c._aw = 0, 500); c.send(m.ph === 'map' ? { t: 'vote', id: m.opts[0].id } : { t: 'ready' }); } if (m.t === 's') { c.snaps++; c.last = m; if (c.phases[c.phases.length - 1] !== m.ph) c.phases.push(m.ph); for (const e of m.ev) { c.evs[e[0]] = (c.evs[e[0]] || 0) + 1; if (e[0] === 'ab') c.abs.push(e[2]); } } });
     ws.on('error', rej); setTimeout(() => rej(new Error('join timeout')), 8000);
   });
 }
@@ -19,7 +19,7 @@ async function until(fn, ms) { const d = Date.now() + ms; while (Date.now() < d)
 (async () => {
   let ok = true; const check = (cond, msg) => { console.log((cond ? 'PASS ' : 'FAIL ') + msg); if (!cond) ok = false; };
   const h0 = await (await fetch(BASE + '/health')).json(); console.log('health', h0); check(h0.v === D.VERSION && D.VERSION >= 7, 'health reports current version');
-  const t0 = Date.now(); const a = await client('', 'Alice', 0); check(a.me.role === 0 && a.me.pub, `public join as Pilot in ${Date.now() - t0}ms (room ${a.me.code})`);
+  const t0 = Date.now(); const a = await client('', 'Alice', 0); a.auto = 1;   // v9: no star-map / upgrade timers, so the public player votes + readies by itself check(a.me.role === 0 && a.me.pub, `public join as Pilot in ${Date.now() - t0}ms (room ${a.me.code})`);
   await sleep(2500);
   check(a.snaps > 25, `snapshots streaming: ${a.snaps} in 2.5s`);
   check(a.last.crew.filter(c => c[1]).length === 5, 'other 5 seats are bots: ' + a.last.crew.map(c => c[0] + (c[1] ? '(bot)' : '')).join(', '));
@@ -29,7 +29,7 @@ async function until(fn, ms) { const d = Date.now() + ms; while (Date.now() < d)
   check(S.sc.slice(0, 6).every(v => v >= 0) && S.sc.slice(6).every(v => v === -1), 'Mk I: only the 6 stations exist, no extra port sections yet');
   check(S.arc === 15 && S.shm > 0 && S.shp <= S.shm, `shield starts as a ${S.arc}° arc, ${S.shp}/${S.shm} HP (${S.shd ? 'recharging' : 'up'})`);
   a.send({ t: 'i', ax: a.last.sh.x + 1000, ay: a.last.sh.y, f: 1, idle: 1 });
-  // private room, 3 humans: pilot vote weight = 2
+  // private room, 3 humans: v9 one vote each (a tie goes to the pilot)
   const code = 'T' + Math.random().toString(36).slice(2, 5).toUpperCase();
   const b = await client(code, 'Bob', 0), c = await client(code, 'Cara', 0), d = await client(code, 'Dan', 4);
   check(b.me.code === code && b.me.role === 0, `private room ${code}: Bob is Pilot`);
@@ -39,10 +39,10 @@ async function until(fn, ms) { const d = Date.now() + ms; while (Date.now() < d)
   await until(() => b.last && b.last.ph === 'map', 8000);
   check(b.last.ph === 'map' && b.last.opts.length === 5, `star map offers ${b.last.opts && b.last.opts.length} missions (1 main + 4 sides): ` + (b.last.opts || []).map(o => o.type + '/' + ['E', 'N', 'H', 'X'][o.diff] + '@' + o.planet.name + ':' + o.planet.kind).join(', '));
   check(b.last.opts.every(o => D.PLANET_K.includes(o.planet.kind)), 'every planet has one of the ' + D.PLANET_K.length + ' realistic kinds');
-  check(b.last.pw === 2, `pilot vote weight with 3 players = ${b.last.pw}`);
+  check(b.last.pw === 1 && Array.isArray(b.last.wait), `v9: every vote weighs 1 (pw=${b.last.pw}), waiting list ${JSON.stringify(b.last.wait)}`);
   const opt = b.last.opts.find(o => o.type === 'pirates' || o.type === 'defend') || b.last.opts[0], other = b.last.opts.find(o => o !== opt);
   b.send({ t: 'vote', id: opt.id }); c.send({ t: 'vote', id: other.id }); await sleep(300);
-  check(b.last.votes[opt.id] === 2 && b.last.votes[other.id] === 1, `weighted tally: pilot pick=${b.last.votes[opt.id]}, Cara's pick=${b.last.votes[other.id]}`);
+  check(b.last.votes[opt.id] === 1 && b.last.votes[other.id] === 1 && b.last.pv === opt.id, `v9 tally 1:1, pilot pick shown as tiebreak: pilot pick=${b.last.votes[opt.id]}, Cara's pick=${b.last.votes[other.id]}`);
   d.send({ t: 'vote', id: opt.id });
   await until(() => b.last.ph === 'mission', 4000);
   check(b.last.ph === 'mission' && b.last.mi.name === opt.planet.name, `all voted -> mission launched at ${b.last.mi && b.last.mi.name} (${b.last.mi && b.last.mi.type})`);

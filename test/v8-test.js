@@ -34,9 +34,9 @@ const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() <
   check(D.VERSION >= 8, 'version is 8 or newer (' + D.VERSION + ')');
   // item 9: port slots
   let slotsOK = true, why = '';
-  for (const t in D.PORT_SLOTS) { const S = D.PORT_SLOTS[t], all = S.flat(), ids = D.TREES[t].ports.map(p => p[0]); if (S.length !== 3 || new Set(all).size !== all.length || S.some(sl => sl.length < 2) || !all.every(i => ids.includes(i)) || !ids.every(i => all.includes(i))) { slotsOK = false; why = t; } }
+  for (const t in D.PORT_SLOTS) { const S = D.PORT_SLOTS[t], all = S.flat(), ids = D.TREES[t].ports.map(p => p[0]); if (t === 'gun' ? (S.length !== 3 || S.some(sl => sl.length !== 5 || new Set(sl).size !== 5) || !all.every(i => ids.includes(i))) : (S.length !== 3 || new Set(all).size !== all.length || S.some(sl => sl.length < 2) || !all.every(i => ids.includes(i)) || !ids.every(i => all.includes(i))))   /* v9: gunners get the same 5 guns per slot (repeats allowed) */ { slotsOK = false; why = t; } }
   check(slotsOK && Object.keys(D.PORT_SLOTS).length === 5, 'Port 1/2/3 each have their own distinct choices, no repeats across them, in all 5 trees ' + why);
-  check(Object.values(D.PORT_SLOTS).every(S => S.every(sl => sl.length === 2)) && D.TREES.pilot.ports.length >= 6, 'at least 2 choices per slot (6 per role, 3 slots x 2); ' + Object.values(D.TREES).map(t => t.ports.length).join('/') + ' ports per role');
+  check(Object.values(D.PORT_SLOTS).every(S => S.every(sl => sl.length >= 2)) && D.TREES.pilot.ports.length >= 6, 'at least 2 choices per slot (6 per role, 3 slots x 2); ' + Object.values(D.TREES).map(t => t.ports.length).join('/') + ' ports per role');
   check(Object.entries(D.TREES).every(([t, T]) => T.ports.every(p => (D.PORT_UPS[t + '.' + p[0]] || []).length >= 2)), 'every port, old and new, has upgrade options');
   check(D.PORT_UPS['pilot.scatter'].some(o => o.o === 'range') && D.PORT_UPS['gun.scatter'].some(o => o.o === 'range'), 'item 13: Scatter Turret has a range upgrade (pilot and gunner)');
   check(D.TREES.pilot.ports.some(p => p[0] === 'hmsl' && /yellow|homing/i.test(p[2])), 'item 14: Homing Missiles pilot port exists');
@@ -70,7 +70,8 @@ const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() <
   P.toasts.length = 0; P.send({ t: 'dev', op: 'noport', r: 0, sl: 1 }); P.send({ t: 'dev', op: 'noport', r: 0, sl: 0 }); await sleep(300);
   P.send({ t: 'buy', kind: 'port', slot: 1, id: 'hmsl' }); await sleep(300); check(P.toasts.length > 0 && !(P.last.crew[0][7] && P.last.crew[0][7][1]), 'a Port 1 option cannot be bought in Port 2 (rejected: "' + P.toasts[0] + '")');
   P.send({ t: 'buy', kind: 'port', slot: 0, id: 'hmsl' }); await sleep(400); check(P.last.crew[0][7] && P.last.crew[0][7][0] && P.last.crew[0][7][0][0] === 'hmsl', 'Port 1 accepts its own option (Homing Missiles)');
-  P.send({ t: 'restart' }); check(await until(() => P.last.ph === 'lobby', 3000), 'Restart Game sends the private ship back to the lobby');
+  P.send({ t: 'restart' }); await sleep(300); (P === A ? B : A).send({ t: 'rvote', v: 1 });   /* v9: with 2 humans a restart is a vote */
+  check(await until(() => P.last.ph === 'lobby', 3000), 'Restart Game (vote passed) sends the private ship back to the lobby');
   check(A.last.md === 0 && !(A.last.crew[0][7] && A.last.crew[0][7][0]) , 'restart resets the campaign and the ports');
   await sleep(300); A.send({ t: 'start' }); await until(() => A.last.ph === 'intro', 6000); A.send({ t: 'ready' }); B.send({ t: 'ready' }); await until(() => A.last.ph === 'map', 4000);
   B.ws.close();

@@ -115,6 +115,13 @@ const csId = (ch, k, i) => 'cs_' + ch + '_' + k + '_' + i;
 const csLines = () => { const L = []; for (let c = 1; c <= 12; c++) for (const k of ['pre', 'post']) (CHAPTERS[c][k] || []).forEach((l, i) => L.push([csId(c, k, i), l[0], l[1]])); EPILOGUE.forEach((l, i) => L.push([csId('ep', 'e', i), l[0], l[1]])); INTRO.forEach((l, i) => L.push([csId('intro', 'i', i), l[0], l[1]])); return L; };
 const CMD_INTRO_BY = { kraal: 0, durmok: 1, grakk: 3, sskarra: 4 }, CMD_DEATH_BY = { kraal: 4, durmok: 0, grakk: 1, sskarra: 3 };
 const cmdLine = (key, kind, r) => { const by = kind === 'i' ? CMD_INTRO_BY : CMD_DEATH_BY, n = kind === 'i' ? CMD_INTRO.length : CMD_DEATH.length; return key in by ? by[key] : (r || 0) % n; };
-const out = { VOICE_MAX, csId, csLines, CMD_INTRO_BY, CMD_DEATH_BY, cmdLine, TITLE, TAGLINE, SHIP, CREW, RACES, CMDRS, LTS, cmdInfo, VILLAIN, CATS, WHO, CHAPTERS, EPILOGUE, TAUNTS, SENDS, CAT_COMMS, CMD_INTRO, CMD_DEATH, BOSS_LINES, FINN_LINES, chapterOf, SEQ12, INTRO, ZONE_LINES };
+// v9: lines that repeat often get several variants (each one voiced: finn_half_0.., finn_low_0.., cat_care_0.., mort_thr)
+const FINN_VAR = {
+  half: ['Hull at fifty percent. We are halfway to a very bad day.', 'Half the hull is gone. The other half is getting nervous.', 'Fifty percent hull. I can patch it, but please stop collecting holes.', 'Hull is at half. Steer us away from the pointy things, yeah?'],
+  low: ['Hull critical! Everybody say a quiet thing.', 'Hull critical! I am out of duct tape and out of ideas!', 'One more hit and we are a very short obituary. Hull critical!', 'Hull critical! Find us some cover, right now!'],
+};
+const CARE_VAR = ['Care package dropped! Hull patched and a few shiny things for you. Mireth always pay.', 'Package away! Some hull patches and a few credits. Do not spend it all at once.', 'Special delivery from the Mireth! We fixed your hull and left you a tip.'];
+const THR_TIP = 'Heads up. The engines spool up slowly, so give them a moment. Any throttle above forty percent burns reroute power, more the higher you push it. Forty and below is free.';
+const out = { FINN_VAR, CARE_VAR, THR_TIP, VOICE_MAX, csId, csLines, CMD_INTRO_BY, CMD_DEATH_BY, cmdLine, TITLE, TAGLINE, SHIP, CREW, RACES, CMDRS, LTS, cmdInfo, VILLAIN, CATS, WHO, CHAPTERS, EPILOGUE, TAUNTS, SENDS, CAT_COMMS, CMD_INTRO, CMD_DEATH, BOSS_LINES, FINN_LINES, chapterOf, SEQ12, INTRO, ZONE_LINES };
 if (typeof module !== 'undefined' && module.exports) module.exports = out; else root.STORY = out;
 })(typeof window !== 'undefined' ? window : globalThis);

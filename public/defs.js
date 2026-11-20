@@ -1,13 +1,13 @@
-// Spacebelts Optional v8: shared game data for the server (require) and the client (window.DEFS)
+// Spacebelts Optional v9: shared game data for the server (require) and the client (window.DEFS)
 (function (root) {
 const PI = Math.PI;
-const VERSION = 8;
+const VERSION = 9;
 const ARENA = 4200;                       // half-size of the mission map (v4: was 3200)
 const EFIRE_WEAK_LV = 5, EFIRE_WEAK = 0.6; // enemy fire does 60% damage on mission levels 1-5, full from level 6
 const REPAIR_CFG = { base: 20, drone: 1.5, mgMax: 1.0, clickDiv: 300, botCps: 1.5 }; // repair: base seconds per section, drone-off speed multiplier, minigame max bonus, click strength on the Repair Bay
 const MONEY_MULT = 1.1;                   // v5: about 10% more credits for everyone
 // v5 power rerouting (Engineer): 10 slots in total over 4 options. Drain per second = base * DRAIN[slots used]; the generator regenerates `base` per second at the start (= exactly 1 slot).
-const RR_CFG = { max: 10, base: 2.0, drain: [0, 1, 1.54, 1.82, 2.23, 2.77, 3.51, 4.46, 5.67, 7.29, 9.45], regenCap: 3.0, lock: 20, lockThr: 0.25,
+const RR_CFG = { max: 10, base: 2.0, drain: [0, 1, 1.75, 2.3, 3.0, 3.9, 5.0, 6.4, 8.1, 10.2, 12.8], regenCap: 3.0, lock: 20, lockThr: 0.25,
   eng: 0.0225, acc: 0.12, wpn: 0.075, shd: 0.15, rep: 0.045, shHp: 0.15, shDr: 0.05 };   // v8: every filled square is 1.5x stronger but drains 1.35x more energy (see drain[]); Conduits / Efficient Routing / the Surge Coupler port improve the deal
    // v6: steeper drain curve (10 slots = 14/s). shd = recharge speed per slot; shHp = +max shield HP per slot; shDr = shield damage reduction per slot    // per slot: top speed, throttle response, gun fire rate, shield recharge speed, repair speed
 const RR_NAMES = ['ENGINES', 'WEAPONS', 'SHIELDS', 'REPAIR'];
@@ -51,7 +51,7 @@ const secLocal = (G, k) => k < 6 ? G.st[k] : (G.po[secRole(k)][secSlot(k)] || G.
 
 // ---------- stat labels (node effects are data-driven) ----------
 const FX = {
-  turn: ['turn rate', '%'], nDmg: ['nose laser damage', '%'], nRate: ['nose fire rate', '%'], nRange: ['nose laser range', '%'], nPierce: ['nose pierce', 'n'],
+  turn: ['turn rate', '%'], strafe: ['strafe thruster power (Z / X)', '%'], nDmg: ['nose laser damage', '%'], nRate: ['nose fire rate', '%'], nRange: ['nose laser range', '%'], nPierce: ['nose pierce', 'n'],
   graze: ['chance a hit becomes a graze', 'p'], crewRof: ['fire rate for the whole crew', '%'], hull: ['max hull', 'n'], rollInv: ['s of roll invulnerability', 's'],
   dmg: ['turret damage', '%'], rof: ['turret fire rate', '%'], slew: ['turret rotation', '%'], range: ['turret range', '%'], pierce: ['turret pierce', 'n'], pd: ['px point-defense radius', 'n'],
   arcG: ['° turret arc', 'n'], sBreak: ['damage to enemy shields', '%'], crit: ['crit chance (x2 dmg)', 'p'],
@@ -120,7 +120,7 @@ const TREES = {
     [N('p_evade', 'Evasive Flight', { graze: 0.08, turn: 0.15 }), N('p_lance', 'Lance Nose', { nPierce: 1 }), N('p_cmd', 'Command Presence', { buff: 2, crewRof: 0.05 }), N('p_over', 'Overpowered Nose', { nDmg: 0.25, nRate: 0.15 })],
     [N('p_flare', 'Flare Burst', {}, 'flare'), N('p_strafe', 'Strafing Run', {}, 'strafe'), N('p_rally', 'Rally Point', {}, 'rally')],
     [N('p_acefleet', 'Ace of the Fleet', { graze: 0.2, turn: 0.3, nRate: 0.3, nDmg: 0.2 }), N('p_flag', 'Flagship Command', { crewRof: 0.15, buff: 3, hull: 4 })]],
-    inf: [['i_turn', 'Trim Tuning', 'turn', 0.02], ['i_nose', 'Nose Coils', 'nDmg', 0.03], ['i_nrate', 'Nose Cycler', 'nRate', 0.02]],
+    inf: [['i_turn', 'Trim Tuning', 'turn', 0.02], ['i_nose', 'Nose Coils', 'nDmg', 0.03], ['i_nrate', 'Nose Cycler', 'nRate', 0.02], ['i_strafe', 'Strafe Thrusters', 'strafe', 0.08]],
     big: [['b_armor', 'Reinforced Cockpit', 'Cockpit section +1 HP', 450, 0, {}], ['b_tc', 'Targeting Computer', 'Nose laser auto-aims at enemies within 15°', 700, 1, {}]],
     ports: [['twin', 'Wing Cannon', 'A bright yellow laser cannon that fires with your nose gun'], ['rockets', 'Rocket Pod', 'A heavy yellow-glow rocket with every 4th nose shot'], ['scatter', 'Scatter Cannon', '5-bolt yellow spread every 1.2s while firing'],
       ['hmsl', 'Homing Missiles', 'Long-range fast yellow missiles fired 45° off the nose, alternating sides; they arc around and hit from behind'], ['pulse', 'Pulse Array', 'A rapid stream of light yellow pulses beside the nose gun'], ['lance', 'Lance Cannon', 'A slow, heavy yellow lance bolt that pierces everything in its path']] },
@@ -162,6 +162,11 @@ const TREES = {
     ports: [['drone2', 'Drone Hangar', 'An extra attack drone'], ['sdrone', 'Shield Drone Bay', 'A drone orbits the ship and blocks shots'], ['welder', 'Auto-Welder', 'Hull regenerates 3x faster'], ['nanites', 'Repair Nanites', 'All automatic repairs run 25% faster'], ['foam', 'Emergency Foam', 'Knocked-out sections restart with more HP'], ['magdr', 'Magnet Drones', 'Credits and cores are pulled in from 60% farther']] },
 };
 // v7: the 2nd and 4th node of pyramid row 2 give no ability, so they carry a small bonus on top of their stat
+// v9: a third choice for every non-gunner port slot
+TREES.pilot.ports.push(['needle', 'Needle Gun', 'Rapid-fire small yellow darts while you hold the nose gun'], ['swarm', 'Swarm Pod', 'Launches 3 small homing missiles every 2.6s while you fire'], ['gyro', 'Gyro Thrusters', '+25% turn rate and +40% strafe-thruster power']);
+TREES.engineer.ports.push(['coolant', 'Coolant Loop', 'Rerouting drains 12% less and the throttle drain is 30% lower'], ['emp', 'EMP Projector', 'Every 14s an EMP stuns enemies within 300 px for 1.6s'], ['flywheel', 'Flywheel Drive', 'The engines answer the throttle much faster, +4% top speed']);
+TREES.shield.ports.push(['coil', 'Regen Coil', '+0.25 shield HP/s regeneration'], ['pulsar', 'Shield Pulse', 'Every 9s a pulse wipes enemy shots within 220 px'], ['harden', 'Hardened Emitter', '+2 shield HP and the shield comes back 25% sooner']);
+TREES.repair.ports.push(['hregen', 'Regen Matrix', 'Steady extra hull regeneration (+0.12 hull/s)'], ['scrap', 'Scrap Collector', '+12% credits from pickups, +30% pickup range'], ['bulk', 'Reinforced Bulkheads', '+1 HP on every ship section']);
 const ROW2_BONUS = { pilot: [{ graze: 0.04 }, { nRate: 0.06 }], gun: [{ dmg: 0.06 }, { rof: 0.06 }], engineer: [{ pipEff: 0.06 }, { bombCd: 0.08 }], shield: [{ shRegen: 0.06 }, { shHp: 1 }], repair: [{ dDmg: 0.08 }, { dHp: 1 }] };
 for (const k in ROW2_BONUS) [1, 3].forEach((i, q) => { const nd = TREES[k].rows[1][i]; for (const f in ROW2_BONUS[k][q]) nd.fx[f] = +((nd.fx[f] || 0) + ROW2_BONUS[k][q][f]).toFixed(3); nd.sac = 1; });
 const EDGE_BONUS = 1.25;
@@ -251,11 +256,30 @@ const PORT_UPS = {
   'repair.magdr': [PU('range', 'Strong Magnets', 'Pickup range', 0.2), PU('salvage', 'Salvage Rights', 'More credits from every pickup', 0.05), PU_HP],
   'repair.welder': [PU('hull', 'Hull Weld', 'Hull regeneration', 0.3), PU('mend', 'Nanite Mist', 'Every damaged section slowly heals itself', 0.02, 'n'), PU_HP],
 };
+Object.assign(PORT_UPS, {
+  'pilot.needle': [PU('dmg', 'Tungsten Tips', 'Needle damage', 0.2), PU('rate', 'Hair Trigger', 'Needles fire faster', 0.1), PU('spread', 'Tight Choke', 'Less spread, longer range', 0.15), PU_HP],
+  'pilot.swarm': [PU('dmg', 'Swarm Warheads', 'Swarm missile damage', 0.2), PU('count', 'Bigger Pod', 'One more missile per swarm', 1, 'n', 3), PU('reload', 'Quick Pod', 'Shorter pause between swarms', 0.1, 'cd', 4), PU_HP],
+  'pilot.gyro': [PU('turn', 'Fine Gyros', 'Even faster turning', 0.06), PU('strafe', 'Side Jets', 'Even stronger strafing', 0.12), PU_HP],
+  'engineer.coolant': [PU('eff', 'Cryo Pumps', 'Rerouting squares drain less energy', 0.04, 'cd', 5), PU('thr', 'Cold Injectors', 'Throttle above 40% drains less energy', 0.1, 'cd', 5), PU_HP],
+  'engineer.emp': [PU('range', 'Big Coil', 'Larger EMP radius', 0.15), PU('rate', 'Fast Charge', 'EMP fires more often', 0.1, 'cd', 4), PU('dur', 'Deep Scramble', 'Enemies stay stunned longer', 0.2), PU_HP],
+  'engineer.flywheel': [PU('resp', 'Lighter Rotor', 'Throttle response even faster', 0.2), PU('speed', 'Overspin', 'More top speed', 0.03), PU_HP],
+  'shield.coil': [PU('regen', 'Dense Windings', 'More shield HP/s regeneration', 0.12, 'n'), PU('cap', 'Coil Buffer', 'More shield HP', 0.5, 'n'), PU_HP],
+  'shield.pulsar': [PU('range', 'Wide Pulse', 'Larger pulse radius', 0.15), PU('rate', 'Pulse Cycler', 'Pulses come more often', 0.1, 'cd', 4), PU_HP],
+  'shield.harden': [PU('cap', 'Thick Emitter', 'More shield HP', 0.7, 'n'), PU('reset', 'Fast Reboot', 'Shield comes back even sooner', 0.08, 'cd', 4), PU_HP],
+  'repair.hregen': [PU('hull', 'Denser Matrix', 'More hull regeneration', 0.3), PU('mend', 'Section Weave', 'Damaged sections slowly heal', 0.02, 'n'), PU_HP],
+  'repair.scrap': [PU('salvage', 'Fine Sieve', 'Even more credits from pickups', 0.05), PU('range', 'Long Arms', 'More pickup range', 0.2), PU_HP],
+  'repair.bulk': [PU('plate', 'Extra Plating', 'More HP on every section', 0.4, 'n'), PU('mend', 'Self-Sealing', 'Damaged sections slowly heal', 0.015, 'n'), PU_HP],
+});
+// v9: Port 3 is the premium slot. Every gun option there can take the Double Barrel upgrade (fires twice as many rounds).
+const PU_DBL = PU('dbl', 'Double Barrel', 'Port 3 only: a second barrel fires every round twice', 1, 'n', 1);
+const GUN5 = ['laser', 'sniper', 'rockets', 'scatter', 'flak'];
+function portUps(tree, id, slot) { const l = PORT_UPS[tree + '.' + id] || []; return tree === 'gun' && slot === 2 ? l.concat([PU_DBL]) : l; }
 function puVal(def, lv) { const v = def.per * lv; if (def.t === 'pct' || def.t === 'p') return '+' + Math.round(v * 100) + '%'; if (def.t === 'cd') return '-' + Math.round(v * 100) + '%'; return '+' + (+v.toFixed(2)); }
 
 // v8: each extra-port slot (Port 1 / Port 2 / Port 3) offers its OWN pair of choices, with no repeats across a role's three slots
-const PORT_SLOTS = { pilot: [['twin', 'hmsl'], ['rockets', 'pulse'], ['scatter', 'lance']], gun: [['laser', 'sniper'], ['rockets', 'beam'], ['scatter', 'flak']], engineer: [['mines', 'surge'], ['tractor', 'flare'], ['aux', 'boost']], shield: [['rear', 'arclens'], ['reflect', 'ioncap'], ['capbank', 'ablate']], repair: [['drone2', 'nanites'], ['sdrone', 'foam'], ['welder', 'magdr']] };
-const BOT_PORTS = [['twin', 'rockets', 'scatter'], ['sniper', 'beam', 'scatter'], ['drone2', 'sdrone', 'welder'], ['mines', 'tractor', 'aux'], ['rear', 'reflect', 'capbank'], ['laser', 'rockets', 'scatter']];
+// v9: three distinct choices per slot for every non-gunner role; gunners pick from the same 5 guns in every slot (repeats allowed)
+const PORT_SLOTS = { pilot: [['twin', 'hmsl', 'needle'], ['rockets', 'pulse', 'swarm'], ['scatter', 'lance', 'gyro']], gun: [GUN5, GUN5, GUN5], engineer: [['mines', 'surge', 'coolant'], ['tractor', 'flare', 'emp'], ['aux', 'boost', 'flywheel']], shield: [['rear', 'arclens', 'coil'], ['reflect', 'ioncap', 'pulsar'], ['capbank', 'ablate', 'harden']], repair: [['drone2', 'nanites', 'hregen'], ['sdrone', 'foam', 'scrap'], ['welder', 'magdr', 'bulk']] };
+const BOT_PORTS = [['twin', 'rockets', 'scatter'], ['sniper', 'rockets', 'flak'], ['drone2', 'sdrone', 'welder'], ['mines', 'tractor', 'aux'], ['rear', 'reflect', 'capbank'], ['laser', 'rockets', 'scatter']];
 const BOT_PATH = { pilot: [3, 2, 2, 1, 1], gun: [1, 1, 1, 1, 0], engineer: [2, 2, 1, 1, 0], shield: [1, 1, 1, 1, 0], repair: [0, 0, 0, 0, 0] };
 const DIFFS = [{ n: 'EASY', lv: -1, m: 0.8 }, { n: 'NORMAL', lv: 0, m: 1 }, { n: 'HARD', lv: 2, m: 1.45 }, { n: 'ELITE', lv: 4, m: 2 }];
 const MTYPES = {
@@ -351,13 +375,13 @@ const ETYPES = [
 const STATION_TYPES = [9, 20, 21, 22, 23];
 const isStation = t => STATION_TYPES.includes(t);
 // v8 hazards: zones are circles. Radiation burns the hull (hull points per second); cold slows the ship; gravity wells (aoe radius R, deadly core) swallow physical projectiles only
-const HAZ = { rad: { n: 'Radioactive cloud', dps: 0.6, col: '120,255,60' }, cold: { n: 'Cold nebula', slow: 0.42, col: '110,200,255' } };
+const HAZ = { rad: { n: 'Radioactive cloud', dps: 1.5, col: '120,255,60' }, cold: { n: 'Cold nebula', slow: 0.42, col: '110,200,255' } };
 const WELL = { R: 300, core: 26, pull: 640 };
 const PLANET_A = ['Kor', 'Vel', 'Tha', 'Ix', 'Mor', 'Zan', 'Dra', 'Cyr', 'Ul', 'Esk', 'Bes', 'Nar', 'Ord', 'Yav', 'Kes', 'Tal', 'Ryl', 'Sul', 'Ost', 'Mav'];
 const PLANET_B = ['a', 'o', 'u', 'e', 'i', 'ae', 'ou', 'y'];
 const PLANET_C = ['lis', 'thar', 'nox', 'ria', 'dor', 'vex', ' Prime', 'mir', 'ten', 'gar', 'phos', ' IV', ' VII', 'lune', 'kesh', 'tura', 'zan'];
 const PLANET_K = ['rocky', 'ice', 'lava', 'ocean', 'gas', 'desert', 'toxic', 'jungle', 'storm', 'moon', 'ringed', 'city'];
 const out = { ION_STUN, ION_COST, ION_CD, NSEC, HULL_T, secRole, secSlot, secLocal, HULL_PER_METAL, ELITE, PORT_UPS, PU_HP, PORT_SLOTS, STATION_TYPES, isStation, HAZ, WELL, puVal, VERSION, MONEY_MULT, RR_CFG, RR_NAMES, BOMB_CFG, ARENA, EFIRE_WEAK_LV, EFIRE_WEAK, REPAIR_CFG, ABS, ABSX, statLine, fxLines, ROLES, RNAME, RSHORT, PORT_NAMES, TREE_OF, NODE_COST, infCost, PORT_COST, portUpCost, PORT_MAX_LV, MK_COST, MK_NAMES, CORE_RATE, SHIELD_ARC0, SHIELD_ARC_MAX, SHIELD_DOWN,
-  GEO, secIdx, FX, fxText, ABIL, INNATE, TREES, pyrAllowed, treeStats, infCap, BOT_PORTS, BOT_PATH, DIFFS, MTYPES, WEAP, ETYPES, PLANET_A, PLANET_B, PLANET_C, PLANET_K };
+  PU_DBL, GUN5, portUps, GEO, secIdx, FX, fxText, ABIL, INNATE, TREES, pyrAllowed, treeStats, infCap, BOT_PORTS, BOT_PATH, DIFFS, MTYPES, WEAP, ETYPES, PLANET_A, PLANET_B, PLANET_C, PLANET_K };
 if (typeof module !== 'undefined' && module.exports) module.exports = out; else root.DEFS = out;
 })(this);

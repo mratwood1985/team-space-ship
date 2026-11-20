@@ -14,19 +14,19 @@ const SHIELD_BLUE = '#4aa8ff';
 const isTouch = matchMedia('(pointer:coarse)').matches || 'ontouchstart' in window;
 if (isTouch) document.body.classList.add('touch');
 const ROLE_HELP = [
-  'Steer by aiming (mouse/stick). Click = nose laser (your lasers, rockets and missiles are bright yellow). <b>Z / X = strafe thrusters</b> (left / right): a weak, slow sideways shift that cannot be destroyed but stops when the Engines are down. You <b>cannot</b> change speed: that is the Engineer. If the Cockpit is destroyed the ship drifts straight ahead until it is repaired. Your vote counts extra on the star map.',
+  'Steer by aiming (mouse/stick). Click = nose laser (your lasers, rockets and missiles are bright yellow). <b>Z / X = strafe thrusters</b> (left / right; the <b>Strafe Thrusters</b> upgrade in your pyramid has no level cap and makes them stronger): a slow sideways shift that cannot be destroyed but stops when the Engines are down. You <b>cannot</b> change speed: that is the Engineer. If the Cockpit is destroyed the ship drifts straight ahead until it is repaired. Your vote counts extra on the star map.',
   'Aim + hold click to fire your starboard (right) turret. Your red bolts shoot down missiles and flak. If the port turret is destroyed you get a full 360° arc.',
   '<b>Click a damaged port</b> in your big side panel (or press 1-6, 0 = hull) to start repairing it: it then repairs <b>automatically</b>, and the port\'s own <b>minigame</b> makes it faster (up to +100%). Your little starship drones are out by default and <b>fly themselves</b>: they burn nearby enemies with a short-range laser and pick up credits and items. <b>Click anywhere on the map</b> to send them to that spot (to grab loot or shoot from another angle), right-click to call them back. <b>Recall them (G)</b> to repair 50% faster. You cannot repair the Repair Bay; if it is destroyed your crewmates must click it back online, and until then you can neither repair nor use the drone.',
-  'You alone control speed: ↑/↓ arrow keys or the mouse wheel = throttle. You also <b>reroute power</b>: you have <b>10 slots</b> to spread over Engines (top speed + quicker throttle), Weapons (gun fire rate), Shields (faster recharge, <b>much stronger and more durable shield</b>) and Repair (faster repairs). Keys 1-4 add a slot, Shift+1-4 remove one. Every filled square makes that system stronger but costs more energy per square (and each extra square drains faster); reroute upgrades improve the trade. With all 10 filled the bar always falls. At 0 energy rerouting is off and engine thrust is capped at 25% for 20 s. <b>A = Proton Bomb</b> (own cooldown, no energy). Engines destroyed = the ship slowly stalls until repaired.',
+  'You alone control speed: ↑/↓ arrow keys or the mouse wheel = throttle. <b>The engines spool up slowly</b> toward the throttle you set, and <b>throttle above 40% drains your reroute power</b> (more the higher it is; 40% and below is free). You also <b>reroute power</b>: you have <b>10 slots</b> to spread over Engines (top speed + quicker throttle), Weapons (gun fire rate), Shields (faster recharge, <b>much stronger and more durable shield</b>) and Repair (faster repairs). Keys 1-4 add a slot, Shift+1-4 remove one. Every filled square makes that system stronger but costs more energy per square (and each extra square drains faster); reroute upgrades improve the trade. With all 10 filled the bar always falls. At 0 energy rerouting is off and engine thrust is capped at 25% for 20 s. <b>A = Proton Bomb</b> (own cooldown, no energy). Engines destroyed = the ship slowly stalls until repaired.',
   '<b>Click = ION BOLT</b> (blue, long range, 7 s cooldown, costs 1.5 shield HP): a hit stuns an enemy for 3 s (no firing or steering) and tears down its shield. Aim to place the blue shield arc: it stays where you point it even when the ship turns. It blocks ALL enemy fire until its HP is gone, then it needs 20 s to recharge. Buy HP and arc width (starts 15°, max 90°) in the upgrades; the Lance abilities fire the shield as a weapon.',
   'Aim + hold click to fire your port (left) turret. Your red bolts shoot down missiles and flak. If the starboard turret is destroyed you get a full 360° arc.'];
-const COMMON = 'Your station destroyed? Ask the Repair crew to click it. <b>If the Repair Bay is destroyed, everybody mashes CLICK RAPIDLY</b> to fix it. <b>A / S / D</b> = your three abilities (pick them in the skill pyramid, U). <b>Tab</b> switch role · <b>H</b> help · <b>Esc</b> menu (Resume / Restart Game).';
+const COMMON = 'Your station destroyed? Ask the Repair crew to click it. <b>If the Repair Bay is destroyed, everybody mashes CLICK RAPIDLY</b> to fix it. <b>A / S / D</b> = your three abilities (pick them in the skill pyramid, U). <b>Tab</b> switch role · <b>H</b> help · <b>Esc</b> menu (Resume / Restart Game: with other players aboard a restart is a vote).';
 
 // ---------- state ----------
 let ws = null, me = { role: -1, cr: 0, tr: null, code: '', pid: 0 }, snaps = [], offset = null, lastSnap = null, cur = null;
 let W = 0, H = 0, DPR = 1, Z = 1, camX = 0, camY = 0, shake = 0, flash = 0, flashC = '#f00';
 const bolts = new Map(), parts = [];
-let joined = false, prefRole = -1, wantedRoom = new URLSearchParams(location.search).get('room') || (location.pathname.match(/^\/r\/(\w+)/) || [])[1] || '';
+let joined = false, prefRole = -1, wantedRoom = new URLSearchParams(location.search).get('room') || new URLSearchParams(location.search).get('ship') || (location.pathname.match(/^\/r\/(\w+)/) || [])[1] || '';
 let cid = localStorage.getItem('tss_cid'); if (!cid) { cid = Math.random().toString(36).slice(2) + Date.now().toString(36); localStorage.setItem('tss_cid', cid); }
 $('name').value = localStorage.getItem('tss_name') || '';
 if (wantedRoom) { $('joininfo').textContent = 'Joining private ship ' + wantedRoom.toUpperCase() + '. Bots keep the seats warm.'; $('go').textContent = 'JOIN SHIP ' + wantedRoom.toUpperCase() + ' ▶'; }
@@ -272,6 +272,18 @@ function drawPortIcon(id, x, y, ang, lv, T, role) {
   else if (id === 'sniper') { cx.fillStyle = '#20242b'; cx.fillRect(-3, -2, 20, 4); cx.fillStyle = '#ff7af5'; cx.fillRect(15, -2.6, 3, 5.2); cx.fillStyle = '#586070'; cx.fillRect(2, -4.5, 6, 3); cx.fillStyle = '#ffd0fa'; cx.beginPath(); cx.arc(18.5, 0, 1.3, 0, TAU); cx.fill(); }
   else if (id === 'laser') { cx.fillStyle = '#32363e'; cx.fillRect(-1, -3.5, 9, 7); barrel(0, 13, 3.4, '#1d2026'); cx.fillStyle = '#ff9a1a'; cx.fillRect(2, -1, 5, 2); }
   else if (id === 'welder') { cx.rotate(-ang); cx.strokeStyle = '#aab'; cx.lineWidth = 2; cx.beginPath(); cx.moveTo(-4, 4); cx.lineTo(0, -2); cx.lineTo(5, 0); cx.stroke(); if ((T * 9 | 0) % 3 === 0) { cx.fillStyle = '#fff'; cx.beginPath(); cx.arc(5, 0, 1.6, 0, TAU); cx.fill(); } }
+  else if (id === 'needle') { barrel(-2, 15, 1.4); barrel(0, 17, 1.4); barrel(2, 15, 1.4); }
+  else if (id === 'swarm') { cx.fillStyle = '#5a606a'; cx.fillRect(-3, -6, 12, 12); for (const [ox, oy] of [[3, -3], [3, 3], [7, 0]]) { cx.fillStyle = '#1a1c20'; cx.beginPath(); cx.arc(ox, oy, 1.8, 0, TAU); cx.fill(); cx.fillStyle = PILOT_YEL; cx.beginPath(); cx.arc(ox, oy, 0.8, 0, TAU); cx.fill(); } }
+  else if (id === 'gyro') { cx.rotate(-ang + T * 4); cx.strokeStyle = PILOT_YEL; cx.lineWidth = 1.4; cx.beginPath(); cx.ellipse(0, 0, 5.5, 2.4, 0, 0, TAU); cx.stroke(); cx.beginPath(); cx.ellipse(0, 0, 2.4, 5.5, 0, 0, TAU); cx.stroke(); }
+  else if (id === 'coolant') { cx.rotate(-ang); cx.fillStyle = '#20323e'; cx.fillRect(-5, -6, 10, 12); cx.strokeStyle = '#6ef'; cx.lineWidth = 1.2; cx.beginPath(); for (let k = 0; k < 4; k++) { cx.moveTo(-4, -4.5 + k * 3); cx.lineTo(4, -3 + k * 3); } cx.stroke(); }
+  else if (id === 'emp') { cx.rotate(-ang); cx.fillStyle = '#1e2430'; cx.beginPath(); cx.arc(0, 0, 5.5, 0, TAU); cx.fill(); cx.strokeStyle = `rgba(140,200,255,${0.5 + 0.4 * sin(T * 7)})`; cx.lineWidth = 1.2; for (const r of [2.5, 4.5]) { cx.beginPath(); cx.arc(0, 0, r, 0, TAU); cx.stroke(); } }
+  else if (id === 'flywheel') { cx.rotate(-ang + T * 9); cx.fillStyle = '#3a404a'; cx.beginPath(); cx.arc(0, 0, 5.5, 0, TAU); cx.fill(); cx.fillStyle = '#ffd24a'; for (let k = 0; k < 4; k++) { cx.rotate(PI / 2); cx.fillRect(1, -0.8, 4.5, 1.6); } }
+  else if (id === 'coil') { cx.rotate(-ang); cx.strokeStyle = '#4ac0ff'; cx.lineWidth = 1.3; cx.beginPath(); for (let k = 0; k <= 12; k++) { const yy = -6 + k; const xx = sin(k * 1.6 + T * 4) * 4; k ? cx.lineTo(xx, yy) : cx.moveTo(xx, yy); } cx.stroke(); }
+  else if (id === 'pulsar') { cx.rotate(-ang); cx.fillStyle = '#1f2c40'; cx.beginPath(); cx.arc(0, 0, 5, 0, TAU); cx.fill(); const f = (T * 0.8) % 1; cx.strokeStyle = `rgba(120,200,255,${1 - f})`; cx.lineWidth = 1.4; cx.beginPath(); cx.arc(0, 0, 2 + f * 6, 0, TAU); cx.stroke(); }
+  else if (id === 'harden') { cx.rotate(-ang); cx.fillStyle = '#2f3a52'; cx.beginPath(); for (let k = 0; k < 6; k++) { const a = k * PI / 3; k ? cx.lineTo(cos(a) * 6, sin(a) * 6) : cx.moveTo(cos(a) * 6, sin(a) * 6); } cx.closePath(); cx.fill(); cx.strokeStyle = '#8fd8ff'; cx.lineWidth = 1.2; cx.stroke(); }
+  else if (id === 'hregen') { cx.rotate(-ang); cx.fillStyle = '#1e3a2a'; cx.fillRect(-5, -5, 10, 10); cx.fillStyle = `rgba(125,255,170,${0.6 + 0.3 * sin(T * 5)})`; cx.fillRect(-1.2, -4, 2.4, 8); cx.fillRect(-4, -1.2, 8, 2.4); }
+  else if (id === 'scrap') { cx.rotate(-ang); cx.strokeStyle = '#c9b27a'; cx.lineWidth = 1.6; cx.beginPath(); cx.moveTo(-5, 4); cx.lineTo(-1, -2); cx.lineTo(4, -5); cx.moveTo(-1, -2); cx.lineTo(4, 1); cx.stroke(); cx.fillStyle = '#ffd54a'; cx.beginPath(); cx.arc(4, 3.5, 1.6, 0, TAU); cx.fill(); }
+  else if (id === 'bulk') { cx.rotate(-ang); cx.fillStyle = '#6a6458'; cx.fillRect(-6, -6, 12, 12); cx.strokeStyle = '#2a2620'; cx.lineWidth = 1; cx.strokeRect(-6, -6, 12, 12); cx.beginPath(); cx.moveTo(-6, 0); cx.lineTo(6, 0); cx.moveTo(0, -6); cx.lineTo(0, 6); cx.stroke(); }
   cx.rotate(-ang); cx.fillStyle = '#ffd54a'; for (let k = 0; k < min(5, (lv / 2) | 0); k++) cx.fillRect(-6 + k * 3, 8, 2, 2); // level pips
   cx.restore();
 }
@@ -643,12 +655,12 @@ function renderUp() {
     const crew = s.crew[me.role], inst = crew[7] || [0, 0];
     h += `<h4 class="ph">Ship ports for your station (${RNAME[me.role]}) <span class="small">· a port is a real section on the hull: it can be destroyed on its own (small fire, benefits lost) and each port is upgraded separately. <b class="r">A port choice is permanent.</b></span></h4><div class="row">`;
     for (let sl = 0; sl < 3; sl++) {
-      h += `<div class="col"><h4>${sl === 2 ? '<span class="c">★ ELITE</span> Port 3' : 'Port ' + (sl + 1)} ${sl >= mk ? `<span class="c">(needs ${MK_NAMES[sl + 1]})</span>` : ''}</h4>${sl === 2 ? `<div class="small">Elite: effect ×${D.ELITE.eff}, upgrades ×${D.ELITE.per}, +${D.ELITE.maxLv} max upgrade levels, +${D.ELITE.secHp} section HP.</div>` : ''}`;
+      h += `<div class="col"><h4>${sl === 2 ? '<span class="c">★ ELITE</span> Port 3' : 'Port ' + (sl + 1)} ${sl >= mk ? `<span class="c">(needs ${MK_NAMES[sl + 1]})</span>` : ''}</h4>${sl === 2 ? `<div class="small">Elite: effect ×${D.ELITE.eff}, upgrades ×${D.ELITE.per}, +${D.ELITE.maxLv} max upgrade levels, +${D.ELITE.secHp} section HP.${upTree === 'gun' ? ' <b class="y">Gun ports here can take ★ Double Barrel: twice as many rounds.</b>' : ''}</div>` : upTree === 'gun' ? '<div class="small">Gunners: the same 5 guns are offered in every port slot (you may pick one twice).</div>' : ''}`;
       const p = inst[sl];
-      if (p) { const t = T.ports.find(x => x[0] === p[0]), lv = p[1], c = portUpCost(lv), u = p[2] || {}, opts = D.PORT_UPS[upTree + '.' + p[0]] || [D.PU_HP], eli = sl === 2, EP = eli ? D.ELITE.per : 1;
+      if (p) { const t = T.ports.find(x => x[0] === p[0]), lv = p[1], c = portUpCost(lv), u = p[2] || {}, opts = D.portUps ? D.portUps(upTree, p[0], sl) : (D.PORT_UPS[upTree + '.' + p[0]] || [D.PU_HP]), eli = sl === 2, EP = eli ? D.ELITE.per : 1;
         h += `<div class="nd own"><b>✔ ${eli ? 'Elite ' : ''}${t[1]}</b> · ${lv} upgrade level${lv === 1 ? '' : 's'} bought<small>${t[2]} <b>Next upgrade costs ${c}¢</b> (price rises with each level bought on this port).</small></div>`;
-        h += opts.map(d0 => { const d = eli ? Object.assign({}, d0, { per: d0.per * EP, max: d0.max + D.ELITE.maxLv }) : d0, l = u[d.o] || 0, full = l >= d.max; return btn(`data-pup="${sl}" data-opt="${d.o}"`, `▲ <b>${d.n}</b> · Lv ${l}/${d.max} ${full ? '(max)' : '· ' + c + '¢'}<small class="fxs"><span class="fxl">${d.d}</span><span class="fxl"><u>Now</u>: ${l ? D.puVal(d, l) : 'none'}${full ? '' : ' → ' + D.puVal(d, l + 1)}</span></small>`, full || me.cr < c || inMission); }).join(''); }
-      else h += T.ports.filter(p => { const ps = D.PORT_SLOTS && D.PORT_SLOTS[upTree] && D.PORT_SLOTS[upTree][sl]; return !ps || ps.includes(p[0]); }).map(p => { const pend = portPending && portPending[0] === sl && portPending[1] === p[0]; return btn(`data-port="${sl}" data-id="${p[0]}"`, `<b>${pend ? '⚠ CLICK AGAIN: PERMANENT · ' : ''}${sl === 2 ? 'Elite ' : ''}${p[1]}</b> · ${PORT_COST[sl]}¢<small class="fxs"><span class="fxl">${p[2]}</span><span class="fxl"><u>Upgrades</u>: ${(D.PORT_UPS[upTree + '.' + p[0]] || []).map(d => d.n).join(' · ')}</span></small>`, sl >= mk || me.cr < PORT_COST[sl] || inMission, pend ? 'warn' : ''); }).join('');
+        h += opts.map(d0 => { const d = eli && d0.o !== 'dbl' ? Object.assign({}, d0, { per: d0.per * EP, max: d0.max + D.ELITE.maxLv }) : d0, l = u[d.o] || 0, full = l >= d.max; return btn(`data-pup="${sl}" data-opt="${d.o}"`, `▲ <b>${d.n}</b> · Lv ${l}/${d.max} ${full ? '(max)' : '· ' + c + '¢'}<small class="fxs"><span class="fxl">${d.d}</span><span class="fxl"><u>Now</u>: ${l ? D.puVal(d, l) : 'none'}${full ? '' : ' → ' + D.puVal(d, l + 1)}</span></small>`, full || me.cr < c || inMission); }).join(''); }
+      else h += T.ports.filter(p => { const ps = D.PORT_SLOTS && D.PORT_SLOTS[upTree] && D.PORT_SLOTS[upTree][sl]; return !ps || ps.includes(p[0]); }).map(p => { const pend = portPending && portPending[0] === sl && portPending[1] === p[0]; return btn(`data-port="${sl}" data-id="${p[0]}"`, `<b>${pend ? '⚠ CLICK AGAIN: PERMANENT · ' : ''}${sl === 2 ? 'Elite ' : ''}${p[1]}</b> · ${PORT_COST[sl]}¢<small class="fxs"><span class="fxl">${p[2]}</span><span class="fxl"><u>Upgrades</u>: ${(D.portUps ? D.portUps(upTree, p[0], sl) : D.PORT_UPS[upTree + '.' + p[0]] || []).map(d => d.o === 'dbl' ? '<b class="y">★ ' + d.n + '</b>' : d.n).join(' · ')}</span></small>`, sl >= mk || me.cr < PORT_COST[sl] || inMission, pend ? 'warn' : ''); }).join('');
       h += '</div>';
     }
     h += '</div>';
@@ -668,15 +680,15 @@ function renderUp() {
 }
 function upFoot() {
   const s = lastSnap, st = $('upst'), rb = $('rdy'); if (!s || !st) return;
-  if (s.ph === 'upgrade') { const hum = s.crew.filter(c => !c[1]).length, r = (s.rdy || []).length, mine = (s.rdy || []).includes(me.pid); rb.classList.remove('hide'); rb.textContent = mine ? 'READY ✔ (undo)' : 'READY ▶'; rb.style.background = mine ? 'rgba(20,80,30,.9)' : ''; st.innerHTML = `Next: star map in <b class="y">${Math.ceil(s.pt)}s</b> · ready ${r}/${hum} players · bots are always ready`; }
+  if (s.ph === 'upgrade') { const hum = s.crew.filter(c => !c[1]).length, r = (s.rdy || []).length, mine = (s.rdy || []).includes(me.pid); rb.classList.remove('hide'); rb.textContent = mine ? 'READY ✔ (undo)' : 'READY ▶'; rb.style.background = mine ? 'rgba(20,80,30,.9)' : ''; const wt = (s.wait || []).map(n => esc9(n)); st.innerHTML = `No timer: take your time. Ready <b class="y">${r}/${hum}</b> players${wt.length ? ' · waiting for <b class="y">' + wt.join(', ') + '</b>' : ' · launching…'} · bots are always ready`; }
   else { rb.classList.add('hide'); st.textContent = s.ph === 'map' ? 'Voting on the star map…' : 'Mission in progress'; }
 }
 
 // ----- star map -----
 function renderMap(s) {
-  $('maph').innerHTML = '★ STAR MAP · choose the next mission · <span class="y">' + Math.ceil(s.pt) + 's</span>';
+  const wt = (s.wait || []).map(n => esc9(n)); $('maph').innerHTML = '★ STAR MAP · choose the next mission · <span class="y">' + (wt.length ? 'waiting for ' + wt.join(', ') : 'everyone voted: launching…') + '</span>';
   const hum = s.crew.filter(c => !c[1]).length;
-  $('mapsub').innerHTML = `Campaign: ${s.md} main missions cleared · ${MK_NAMES[s.mk]} · ${s.co} ◆ Morph Metal<br>Vote weight: <b class="y">Pilot ${s.pw}</b> (live players − 1) · everyone else 1 · ${hum} player${hum === 1 ? '' : 's'} aboard. Launches when all players vote or time runs out.`;
+  $('mapsub').innerHTML = `Campaign: ${s.md} main missions cleared · ${MK_NAMES[s.mk]} · ${s.co} ◆ Morph Metal<br>One vote each · <b class="y">a tie goes to the pilot's pick</b>${s.crew[0][1] ? ' (the pilot is a bot: the crew tiebreak decides)' : ''} · ${hum} player${hum === 1 ? '' : 's'} aboard. No timer: launches once every player has voted.`;
   const key = s.opts.map(o => o.id).join() + '|' + JSON.stringify(s.votes) + s.my;
   if (renderMap.key === key) return; renderMap.key = key;
   $('mcards').innerHTML = s.opts.map((o, i) => { const v = s.votes[o.id] || 0, M = MTYPES[o.type]; return `<div class="mc ${o.kind} ${s.my === o.id ? 'voted' : ''}" data-id="${o.id}"><canvas width="240" height="120" data-pl="${i}"></canvas><span class="${o.kind === 'main' ? 'y' : 'small'}">${o.kind === 'main' ? '★ MAIN MISSION' : '◇ SIDE MISSION'}</span> · <span class="d${o.diff}">${DIFFS[o.diff].n}</span> · Lv ${o.level}<b>${o.title ? 'Ch.' + o.ch + ' · ' + o.title + ' — ' : ''}${o.planet.name}</b><span class="c">${M.n}</span><br><span class="small">${M.d}${o.mod && o.mod !== 'none' ? ' · ' + (MODL[o.mod] || '☄ ' + o.mod) : ''}</span><br><span class="small" style="color:${o.level > EFIRE_WEAK_LV ? '#f99' : '#9cf'}">${o.level > EFIRE_WEAK_LV ? '⚠ enemy fire: FULL strength' : 'enemy fire: -' + round((1 - EFIRE_WEAK) * 100) + '% (levels 1–' + EFIRE_WEAK_LV + ')'}</span><br><span class="small">Reward ×${DIFFS[o.diff].m}${o.diff >= 2 || o.kind === 'main' ? ' · +1 ◆ core' : ''}</span><br><span class="v">${v ? '▮'.repeat(min(v, 12)) + ' ' + v : ''}</span></div>`; }).join('');
@@ -737,10 +749,10 @@ function hudDom(s) {
 const HINTS = [[['Click', 'nose laser'], ['Aim', 'steer']], [['Click', 'fire turrets']], [['Click a port', 'start repair'], ['Click map', 'send drones'], ['G', 'recall drones: +50%']], [['↑/↓', 'throttle'], ['1-4 / Shift', 'power slots']], [['Aim', 'aim the arc'], ['Click', 'ION BOLT: stuns 3s'], ['Ship turns', 'arc stays put']], [['Click', 'fire turrets']]];
 function crewLine(s, c, i) { const sh = s.sh, down = []; for (let k = 0; k < NSEC; k++) if (sh.dn[k] && secRole(k) === i) down.push(secShort(k)); return `<div class="${i === me.role ? 'me' : c[1] ? 'bot' : ''} ${down.length ? 'dn' : ''}">${RICON[i]} ${RSHORT[i]} ${c[1] ? '🤖' : '👤'} ${c[0]}${c[4] ? ' (idle·bot)' : ''}${c[3] ? ' 🔧' : ''}${down.length ? ' ✖ ' + down.join(', ') + ' DOWN' : ''}${c[6].length ? ' <span class="y">' + c[6].map(b => '⚡' + b).join(' ') + '</span>' : ''}</div>`; }
 function abilityBar(s) {
-  const r = me.role, ab = s.crew[r][5], key = r + '|' + ab.map(a => a ? a[0] : '-').join();
+  const r = me.role, ab = s.crew[r][5], stl = me.tr && me.tr.pilot && me.tr.pilot.i ? me.tr.pilot.i.i_strafe || 0 : 0, key = r + '|' + ab.map(a => a ? a[0] : '-').join() + '|' + (r === 0 ? stl : '');
   if (key !== abKey) {
     abKey = key; const lbl = ['A', 'S', 'D'];
-    $('abar').innerHTML = [0, 1, 2].map(i => { const a = ab[i]; return `<div class="ab ${a ? '' : 'lock'} ${a && ABIL[a[0]].buff ? 'buff' : ''}" data-slot="${i}" title="${a ? ABIL[a[0]].d : 'Pick an active node in the skill pyramid (U)'}"><span class="k">${lbl[i]}</span>${a ? ABIL[a[0]].n : '<br><small>locked · U</small>'}<div class="cdv"></div><div class="cdt"></div></div>`; }).join('') + HINTS[r].map(h => `<div class="ab hint"><span class="k" style="font-size:12px">${h[0]}</span>${h[1]}</div>`).join('') + (r === SHIELD ? `<div class="ab hint" id="modehint"></div>` : '');
+    $('abar').innerHTML = [0, 1, 2].map(i => { const a = ab[i]; return `<div class="ab ${a ? '' : 'lock'} ${a && ABIL[a[0]].buff ? 'buff' : ''}" data-slot="${i}" title="${a ? ABIL[a[0]].d : 'Pick an active node in the skill pyramid (U)'}"><span class="k">${lbl[i]}</span>${a ? ABIL[a[0]].n : '<br><small>locked · U</small>'}<div class="cdv"></div><div class="cdt"></div></div>`; }).join('') + (r === 0 ? `<div class="ab hint strafeh" id="strafeh" title="Z / X fire the strafe thrusters (slide sideways). Strafe Thrusters is a pilot upgrade with no level cap in your pyramid (U): every level adds +8% strafe power."><span class="k" style="font-size:12px">Z / X</span>strafe<br><small>Thrusters Lv ${stl} · upgrade: U</small></div>` : '') + HINTS[r].map(h => `<div class="ab hint"><span class="k" style="font-size:12px">${h[0]}</span>${h[1]}</div>`).join('') + (r === SHIELD ? `<div class="ab hint" id="modehint"></div>` : '');
     $('abar').querySelectorAll('[data-slot]').forEach(d => { const f = e => { e.preventDefault(); act('qer'[+d.dataset.slot]); }; d.addEventListener('mousedown', f); d.addEventListener('touchstart', f, { passive: false }); });
   }
   $('abar').querySelectorAll('[data-slot]').forEach(d => { const a = ab[+d.dataset.slot]; if (!a) return; const f = a[2] ? a[1] / a[2] : 0; d.querySelector('.cdv').style.height = (f * 100) + '%'; d.querySelector('.cdt').textContent = a[1] > 0 ? Math.ceil(a[1]) : ''; d.classList.toggle('ready', a[1] <= 0); });
@@ -939,19 +951,21 @@ function rrBuild() {
 }
 function engPanel(s) {
   rrBuild(); const sh = s.sh, P = sh.pip, used = sh.eu, lock = sh.lk > 0, st = me.tr && D.treeStats('engineer', me.tr.engineer), pe = 1 + (st ? st.pipEff || 0 : 0), dn = sh.dn[ENG];
-  const net = lock ? sh.em / RR_CFG.lock : sh.rg - sh.rd * (dn ? 0 : 1);
-  const key = [P.join(), used, lock, dn, round(sh.en), sh.em, sh.rd, sh.rg, round(sh.lk), round(thr * 100), sh.spd, me.tr ? JSON.stringify(st && st.pipEff) : ''].join('|');
+  const td = sh.td || 0, net = lock ? sh.em / RR_CFG.lock : sh.rg - sh.rd * (dn ? 0 : 1) - td;
+  const key = [P.join(), used, lock, dn, round(sh.en), sh.em, sh.rd, sh.rg, round(sh.lk), round(thr * 100), sh.spd, td, round(sh.thr * 100), me.tr ? JSON.stringify(st && st.pipEff) : ''].join('|');
   if (engPanel.k === key) return; engPanel.k = key;
   $('rrused').innerHTML = `slots <b class="${used >= RR_CFG.max ? 'r' : 'y'}">${used}/${RR_CFG.max}</b>`;
   const f = clamp(sh.en / sh.em, 0, 1); $('rrbar').style.width = (f * 100) + '%'; $('rrbar').style.background = lock ? 'linear-gradient(180deg,#fff6,#0003),#c33' : f < 0.25 ? 'linear-gradient(180deg,#fff6,#0003),#f84' : 'linear-gradient(180deg,#fff6,#0003),#ffd54a';
   $('rrenv').textContent = `${round(sh.en)} / ${sh.em}`;
-  $('rrnet').innerHTML = lock ? `<span class="r">recharging +${(sh.em / RR_CFG.lock).toFixed(1)}/s</span>` : `generator <b class="g">+${sh.rg.toFixed(1)}</b> · drain <b class="r">−${(dn ? 0 : sh.rd).toFixed(1)}</b> = <b class="${net >= 0 ? 'g' : 'r'}">${net >= 0 ? '+' : ''}${net.toFixed(1)}/s</b>${net < 0 && sh.en > 0 ? ` · empty in <b class="r">${Math.ceil(sh.en / -net)}s</b>` : ''}`;
+  $('rrnet').innerHTML = lock ? `<span class="r">recharging +${(sh.em / RR_CFG.lock).toFixed(1)}/s</span>` : `generator <b class="g">+${sh.rg.toFixed(1)}</b> · drain <b class="r">−${(dn ? 0 : sh.rd).toFixed(1)}</b>${td > 0 ? ` · throttle <b class="r">−${td.toFixed(1)}</b>` : ''} = <b class="${net >= 0 ? 'g' : 'r'}">${net >= 0 ? '+' : ''}${net.toFixed(1)}/s</b>${net < 0 && sh.en > 0 ? ` · empty in <b class="r">${Math.ceil(sh.en / -net)}s</b>` : ''}`;
   $('rrlock').classList.toggle('hide', !lock); $('rrlock').innerHTML = lock ? `⚠ POWER DEPLETED<br><small>rerouting OFFLINE · engine thrust capped at 25% · power back in <b>${Math.ceil(sh.lk)}s</b></small><div class="lkb"><i style="width:${round((1 - sh.lk / RR_CFG.lock) * 100)}%"></i></div>` : '';
   $('rrrows').classList.toggle('off', lock || dn);
   $('rrrows').querySelectorAll('.rrr').forEach((row, k) => { row.querySelector('.rrd').textContent = RR_DESC[k](P[k] * pe); row.querySelector('.rrh b').textContent = (k + 1) + ' ' + RR_NAMES[k] + ' ' + P[k];
     row.querySelectorAll('.rrs i').forEach((i, j) => { i.className = j < P[k] ? 'on' : ''; i.style.background = j < P[k] ? RR_COL[k] : ''; i.style.boxShadow = j < P[k] ? '0 0 6px ' + RR_COL[k] : ''; }); });
   $('thrbar').style.width = (thr * 100) + '%';
-  $('thrt').innerHTML = `Throttle ${round(thr * 100)}% · speed ${sh.spd}${lock ? ' · <span class="r">power depleted: 25% thrust</span>' : ''}${dn ? ' · <span class="r">ENGINES DOWN: stalling</span>' : ''}${sh.dn[PILOT] ? ' · <span class="r">cockpit down: no steering</span>' : ''}`;
+  $('thrmark').style.left = (sh.thr * 100) + '%';
+  const ti = $('thrinfo'); if (ti) { const hi = thr > 0.405; ti.className = 'thrinfo ' + (hi ? 'hot' : 'cool'); ti.innerHTML = hi ? `⚡ Throttle above 40% drains reroute power: <b>−${td.toFixed(1)}/s</b> now (more the higher you go)` : '✓ Throttle at 40% or below: no power drain'; }
+  $('thrt').innerHTML = `Throttle set ${round(thr * 100)}% · engines at <b class="${abs(sh.thr - thr) > 0.03 ? 'y' : 'g'}">${round(sh.thr * 100)}%</b>${abs(sh.thr - thr) > 0.03 ? ' (spooling…)' : ''} · speed ${sh.spd}${lock ? ' · <span class="r">power depleted: 25% thrust</span>' : ''}${dn ? ' · <span class="r">ENGINES DOWN: stalling</span>' : ''}${sh.dn[PILOT] ? ' · <span class="r">cockpit down: no steering</span>' : ''}`;
 }
 function launch() {
   if (joined) return; joined = true; audioInit(); localStorage.setItem('tss_name', $('name').value.trim());
@@ -960,7 +974,7 @@ function launch() {
 const pr = $('prefroles');
 pr.innerHTML = [PILOT, GUNL, GUNR, SHIELD, ENG, REPAIR].map(i => `<button data-r="${i}">${RICON[i]} ${RSHORT[i]}</button>`).join('') + '<button data-r="-1" class="sel">ANY</button>';
 pr.querySelectorAll('button').forEach(b => b.onclick = () => { prefRole = +b.dataset.r; pr.querySelectorAll('button').forEach(x => x.classList.toggle('sel', x === b)); });
-$('go').onclick = launch;
+$('go').onclick = () => wantedRoom ? launch() : openBrowser();   // v9: Launch opens the ship browser first (an invite link skips it)
 $('mkpriv').onclick = () => { location.href = '/new'; };
 $('joincode').onclick = () => { const c = $('code').value.trim().toUpperCase(); if (c) location.href = '/?room=' + encodeURIComponent(c); };
 function invite() { const url = location.origin + '/?room=' + me.code; (navigator.clipboard ? navigator.clipboard.writeText(url) : Promise.reject()).then(() => toast('Invite link copied: ' + url), () => prompt('Share this link', url)); }
@@ -1275,7 +1289,7 @@ function v7Event(e, s) {
   const k = e[0];
   if (k === 'comm') {
     if (e[1] === 'v') { const t = e[3] ? ST.SENDS[e[2] % ST.SENDS.length] : ST.TAUNTS[e[2] % ST.TAUNTS.length]; commShow('szarkath', t, e[3] ? 'VILLAIN · REINFORCEMENTS INBOUND' : 'VILLAIN TRANSMISSION', e[3] ? 'vs' + (e[2] % ST.SENDS.length) : 'vt' + (e[2] % ST.TAUNTS.length)); }
-    else if (e[1] === 'c') { const l = e[3] ? ['tavi', 'Care package dropped! Hull patched and a few shiny things for you. Mireth always pay.'] : ST.CAT_COMMS[e[2] % ST.CAT_COMMS.length]; commShow(l[0], l[1], 'MIRETH ALLIES', e[3] ? 'cat_care' : 'cat' + (e[2] % ST.CAT_COMMS.length)); if (e[3]) { SFX.core(); toast('🐾 Mireth care package: hull repaired + credits', '#c9a0ff'); } }
+    else if (e[1] === 'c') { const cv = floor(random() * ST.CARE_VAR.length), l = e[3] ? ['tavi', ST.CARE_VAR[cv]] : ST.CAT_COMMS[e[2] % ST.CAT_COMMS.length]; commShow(l[0], l[1], 'MIRETH ALLIES', e[3] ? 'cat_care_' + cv : 'cat' + (e[2] % ST.CAT_COMMS.length)); if (e[3]) { SFX.core(); toast('🐾 Mireth care package: hull repaired + credits', '#c9a0ff'); } }
     return 1; }
   if (k === 'cmd') {
     const w = cmdWho(e[1]);
@@ -1302,7 +1316,7 @@ function vLoad(id) {
     .then(b => { VOICE.buf[id] = b; delete VOICE.loading[id]; return b; }).catch(() => { VOICE.bad[id] = 1; delete VOICE.loading[id]; return null; });
 }
 function vPrefetch() {   // once per page, when the first mission starts: the short callouts everyone hears most
-  if (VOICE.pre || !A.ctx) return; VOICE.pre = 1; const ids = ['finn_half', 'finn_low', 'pz_rad', 'pz_cold', 'pz_well'];
+  if (VOICE.pre || !A.ctx) return; VOICE.pre = 1; const ids = ['finn_half_0', 'finn_half_1', 'finn_half_2', 'finn_half_3', 'finn_low_0', 'finn_low_1', 'finn_low_2', 'finn_low_3', 'pz_rad', 'pz_cold', 'pz_well'];
   ids.forEach((id, i) => setTimeout(() => vLoad(id), 400 + i * 350));
 }
 const FEM = { ishkara: 1, tavi: 1, sskarra: 1 };
@@ -1347,8 +1361,8 @@ function v7Frame(dt, o) {
   if (dlg.on) { dlg.t += dt; if (dlg.t > dlg.dur) dlgNext(); }
   const s = lastSnap; if (!s || !o) return; const sh = s.sh, inM = s.ph === 'mission', fr = sh.h / sh.hm;
   if (inM) vPrefetch(); const low = inM && fr <= 0.1 && !sh.dead; $('alarmbar').classList.toggle('hide', !low);
-  if (low) { alarmT -= dt; if (alarmT <= 0) { alarmT = 1.0; tone(880, 0.42, 'sawtooth', 0.075, 600); tone(640, 0.42, 'square', 0.045, 440, null, 0.44); } if (!lowFlag) { lowFlag = 1; finnSay(ST.FINN_LINES.low[0], ST.FINN_LINES.low[1], 1, 'finn_low'); } } else { alarmT = 0; if (fr > 0.12) lowFlag = 0; }
-  if (inM && !sh.dead) { if (fr < 0.5 && fr > 0.1 && !halfFlag) { halfFlag = 1; finnSay(ST.FINN_LINES.half[0], ST.FINN_LINES.half[1], 1, 'finn_half'); } if (fr > 0.58) halfFlag = 0; } else if (!inM) { halfFlag = 0; lowFlag = 0; }
+  if (low) { alarmT -= dt; if (alarmT <= 0) { alarmT = 1.0; tone(880, 0.42, 'sawtooth', 0.075, 600); tone(640, 0.42, 'square', 0.045, 440, null, 0.44); } if (!lowFlag) { lowFlag = 1; { const vi = floor(random() * ST.FINN_VAR.low.length); finnSay(ST.FINN_VAR.low[vi], ST.FINN_VAR.low[vi], 1, 'finn_low_' + vi); } } } else { alarmT = 0; if (fr > 0.12) lowFlag = 0; }
+  if (inM && !sh.dead) { if (fr < 0.5 && fr > 0.1 && !halfFlag) { halfFlag = 1; { const vi = floor(random() * ST.FINN_VAR.half.length); finnSay(ST.FINN_VAR.half[vi], ST.FINN_VAR.half[vi], 1, 'finn_half_' + vi); } } if (fr > 0.58) halfFlag = 0; } else if (!inM) { halfFlag = 0; lowFlag = 0; }
   const stn = inM && sh.st > 0 && !sh.dead; $('stun').classList.toggle('hide', !stn); $('stuntxt').classList.toggle('hide', !stn); if (stn) $('stuntxt').firstChild.nodeValue = '⚡ STUNNED ' + sh.st.toFixed(1) + 's';
 }
 // ----- v8: the player's character portrait, framed with their name, sitting on top of the hull panel (bottom-left). Falls back to the right of the panel when there is no room above it (short phone screens). -----
@@ -1416,15 +1430,15 @@ function menuOpen() { return !$('menu').classList.contains('hide'); }
 function menuClose() { $('menu').classList.add('hide'); restartArmed = 0; }
 let restartArmed = 0;
 function menuRender() {
-  const priv = !me.pub;
+  const priv = !me.pub, solo = !lastSnap || (lastSnap.crew || []).filter(c => !c[1]).length <= 1;
   $('menu').innerHTML = `<div class="mb"><h2>☰ GAME MENU</h2>
     <button data-m="resume">▶ Resume</button>
-    <button data-m="restart" class="warn">${restartArmed ? '⚠ CLICK AGAIN: restart the whole game' : '↻ Restart Game'}</button>
+    <button data-m="restart" class="warn">${restartArmed ? '⚠ CLICK AGAIN: ' + (solo ? 'restart the whole game' : 'start a restart vote') : solo ? '↻ Restart Game' : '↻ Restart Game (start a vote)'}</button>
     <button data-m="help">? Controls &amp; help (H)</button>
     <button data-m="mute">${A.muted ? '🔇 Sound: off' : '🔊 Sound: on'}</button>
     <button data-m="music">${A.music ? '♪ Music: on' : '♪ Music: off'}</button>
     <button data-m="leave">⏏ Leave to the title screen</button>
-    <div class="small">The game keeps running while this menu is open.<br>Restart resets the campaign, ports, upgrades and credits${priv ? ' for everyone on this ship and returns to the lobby' : ''}.</div></div>`;
+    <div class="small">The game keeps running while this menu is open.<br>Restart resets the campaign, ports, upgrades and credits for everyone on this ${priv ? 'ship' : 'public ship'} and returns to the character lobby.${solo ? '' : ' With other players aboard it starts a vote: a majority of Yes votes restarts.'}</div></div>`;
 }
 function menuToggle() { if (menuOpen()) menuClose(); else { restartArmed = 0; menuRender(); $('menu').classList.remove('hide'); } }
 $('menu').addEventListener('click', e => {
@@ -1466,7 +1480,7 @@ $('lobby').addEventListener('click', e => {
   if (e.target.closest('[data-go]')) { send({ t: 'start' }); lobbyKey = ''; }
 });
 function v8Dom(s) {
-  const ph = s.ph, L = $('lobby');
+  const ph = s.ph, L = $('lobby'); rvUI(s); engTip(s);
   document.body.classList.toggle('pil', me.role === 0);
   $('feed').classList.toggle('hide', ph !== 'mission');
   if (ph === 'lobby') { L.classList.remove('hide'); lobbyRender(s); }
@@ -1482,15 +1496,71 @@ function v8Event(e, s) {
   if (k === 'wsw') { sparks(e[1], e[2], 6, '#b050ff', 120, 0.4, 2); if (gate('wsw', 120)) tone(180, 0.2, 'sine', 0.05, 40, e[1]); return 1; }
   if (k === 'restart') { introSeen = 0; try { sessionStorage.removeItem('tss_intro'); } catch (_) { } toast('↻ Game restarted', '#9cf'); feedAdd('Game restarted', 'i'); return 1; }
   if (k === 'intro') return 1;
+  if (k === 'rv') { toast('↻ ' + esc9(e[1]) + ' started a restart vote', '#ffd54a'); feedAdd('Restart vote started by ' + esc9(e[1]), 'w'); tone(660, 0.12, 'triangle', 0.06); tone(880, 0.12, 'triangle', 0.06, null, null, 0.14); return 1; }
+  if (k === 'rvr') { toast(e[1] ? '↻ Restart vote passed: back to the lobby' : '✖ Restart vote failed', e[1] ? '#9cf' : '#f99'); return 1; }
+  if (k === 'emp') { ring(e[1], e[2], 20, e[3], 0.55, '#8cf0ff', 5); ring(e[1], e[2], 10, e[3] * 0.7, 0.4, '#ffffff', 2); if (gate('emp', 300)) tone(140, 0.35, 'sawtooth', 0.07, 60, e[1]); return 1; }
+  if (k === 'spulse') { ring(e[1], e[2], 30, e[3], 0.45, '#5ab8ff', 6); if (gate('spulse', 300)) tone(520, 0.25, 'sine', 0.06, 1200, e[1]); return 1; }
   return 0;
 }
+// ----- v9: restart vote banner, engineer throttle tip, ship browser
+const esc9 = t => String(t == null ? '' : t).replace(/[<>&"]/g, c => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;', '"': '&quot;' })[c]);
+function rvUI(s) {
+  const el = $('rvote'), rv = s.rv; if (!el) return;
+  if (!rv) { if (!el.classList.contains('hide')) { el.classList.add('hide'); el.dataset.k = ''; } return; }
+  const mine = rv.y.includes(me.pid) ? 1 : rv.n.includes(me.pid) ? 0 : -1, k = JSON.stringify([rv.y, rv.n, rv.t, rv.need, mine]); el.classList.remove('hide'); if (el.dataset.k === k) return; el.dataset.k = k;
+  el.innerHTML = `<div class="rvh">↻ RESTART VOTE</div><div><b>${esc9(rv.by)}</b> wants to restart the game from the beginning. Everyone goes back to the lobby (pick characters again) with fresh credits and upgrades.</div>
+  <div class="rvc"><span class="g">✔ Yes ${rv.y.length}</span> · <span class="r">✖ No ${rv.n.length}</span> · needs <b>${rv.need}</b> yes · <b class="y">${rv.t}s</b> left</div>
+  ${mine < 0 ? '<div class="rvb"><button data-rv="1">✔ YES, restart</button><button data-rv="0">✖ NO, keep playing</button></div>' : `<div class="small">You voted <b>${mine ? 'YES' : 'NO'}</b> · <button class="mini" data-rv="${mine ? 0 : 1}">change to ${mine ? 'NO' : 'YES'}</button></div>`}`;
+}
+document.addEventListener('click', e => { const b = e.target.closest && e.target.closest('[data-rv]'); if (b && $('rvote').contains(b)) { send({ t: 'rvote', v: +b.dataset.rv }); $('rvote').dataset.k = ''; } });
+let engTipT = 0;
+function engTip(s) {   // one-time comm from Mort explaining the throttle lag + the >40% power drain
+  if (s.ph !== 'mission' || me.role !== ENG) { engTipT = 0; return; }
+  engTipT++; if (engTipT < 45) return;
+  try { if (localStorage.getItem('tss_thrtip')) return; localStorage.setItem('tss_thrtip', '1'); } catch (_) { }
+  commShow('mort', ST.THR_TIP, 'ENGINEER TIP · THROTTLE', 'mort_thr'); feedAdd('Throttle above 40% drains reroute power', 'i');
+}
+let brTimer = 0;
+const BR_PH = { lobby: 'in the lobby', intro: 'briefing', map: 'on the star map', mission: 'on a mission', result: 'mission over', upgrade: 'upgrading' };
+function openBrowser() {
+  audioInit(); localStorage.setItem('tss_name', $('name').value.trim());
+  $('intro').classList.add('hide'); $('browser').classList.remove('hide'); brLoad(); clearInterval(brTimer); brTimer = setInterval(brLoad, 3000);
+}
+function closeBrowser() { clearInterval(brTimer); $('browser').classList.add('hide'); }
+async function brLoad() { let L = null; try { L = await (await fetch('/rooms', { cache: 'no-store' })).json(); } catch (_) { } brRender(L); }
+function brRender(L) {
+  const list = (L || []).filter(r => r.humans > 0 || !r.empty).sort((a, b) => b.humans - a.humans || (b.lv || 0) - (a.lv || 0)), MK = ['Mk I', 'Mk II', 'Mk III', 'Mk IV'];
+  $('brlist').innerHTML = L == null ? '<div class="small">Could not reach the server…</div>' : list.length ? list.map(r => { const full = r.humans >= (r.cap || 6); return `<div class="brr">
+    <div class="bri"><b>${r.pub ? '🌐 Public ship' : '🚀 Ship'} ${esc9(r.code)}</b> <span class="small">${BR_PH[r.phase] || r.phase}${r.mission ? ': ' + esc9(r.mission) : ''}</span>
+    <div class="small">Level <b class="y">${r.lv || r.mainDone + 1}</b> · ${r.mainDone} main mission${r.mainDone === 1 ? '' : 's'} cleared · ${MK[r.mk] || ''} · 👤 <b>${r.humans}/${r.cap || 6}</b> players${(r.names || []).length ? ': ' + r.names.map(esc9).join(', ') : ''} · 🤖 ${6 - r.humans} bots</div></div>
+    <button data-join="${esc9(r.code)}" ${full ? 'disabled' : ''}>${full ? 'FULL' : 'JOIN ▶'}</button></div>`; }).join('') : '<div class="small brn">No ships are flying right now. Create one, or start the public ship.</div>';
+}
+$('browser').addEventListener('click', e => {
+  const t = e.target.closest('button'); if (!t) return;
+  if (t.dataset.join) { wantedRoom = t.dataset.join === 'PUBLIC' ? '' : t.dataset.join; closeBrowser(); launch(); }
+  else if (t.id === 'brnew') { wantedRoom = Math.random().toString(36).slice(2, 7).toUpperCase(); try { history.replaceState(null, '', '/?room=' + wantedRoom); } catch (_) { } closeBrowser(); launch(); }
+  else if (t.id === 'brpub') { wantedRoom = ''; closeBrowser(); launch(); }
+  else if (t.id === 'brback') { closeBrowser(); $('intro').classList.remove('hide'); }
+});
 // ----- hazard zones + gravity wells (world space)
+// v9 radiation look: shimmering glow, drifting toxic smoke, rippling rings radiating outward, heat-haze bands
+function radFx(x, y, r, T) {
+  cx.fillStyle = `rgba(150,255,80,${0.05 + 0.045 * sin(T * 9) * sin(T * 3.3)})`; cx.fillRect(x - r, y - r, r * 2, r * 2);   // shimmer
+  const sm = glow('#5fbf3a', 64), n = 16;
+  for (let i = 0; i < n; i++) { const h = (i * 7919 + 31) % 997 / 997, h2 = (i * 6007 + 3) % 983 / 983, f = (T * (0.03 + 0.02 * h) + h2) % 1, a = h * TAU + T * 0.06 * (i % 2 ? 1 : -1), d = r * (0.1 + 0.85 * f), sz = r * (0.22 + 0.2 * h) * (0.7 + 0.6 * f);
+    cx.globalAlpha = 0.33 * sin(f * PI) * (0.7 + 0.3 * sin(T * 1.7 + i)); cx.drawImage(sm, x + cos(a) * d - sz, y + sin(a) * d - sz, sz * 2, sz * 2); }
+  cx.globalAlpha = 1; cx.lineWidth = 3;
+  for (let i = 0; i < 4; i++) { const f = (T * 0.22 + i / 4) % 1, rr = r * (0.08 + 0.95 * f); cx.strokeStyle = `rgba(190,255,110,${0.5 * (1 - f) * min(1, f * 6)})`; cx.beginPath();
+    for (let q = 0; q <= 48; q++) { const aa = q / 48 * TAU, w = rr + 7 * sin(aa * 7 + T * 4 + i) * (0.4 + f); q ? cx.lineTo(x + cos(aa) * w, y + sin(aa) * w) : cx.moveTo(x + cos(aa) * w, y + sin(aa) * w); } cx.stroke(); }
+  cx.lineWidth = 2; for (let k = 0; k < 6; k++) { const yy = y - r + ((k / 6 + T * 0.05) % 1) * 2 * r; cx.strokeStyle = 'rgba(220,255,160,.10)'; cx.beginPath(); for (let q = 0; q <= 20; q++) { const xx = x - r + q / 20 * 2 * r; const w = yy + 5 * sin(q * 0.9 + T * 6 + k); q ? cx.lineTo(xx, w) : cx.moveTo(xx, w); } cx.stroke(); }
+}
 function v8World(o, T, view) {
   const s = o.s;
   for (const z of s.zn || []) {
     const [zk, x, y, r] = z; if (!view(x, y, r)) continue; const rad = zk === 0, c0 = rad ? '90,255,60' : '120,200,255';
     cx.save(); cx.beginPath(); cx.arc(x, y, r, 0, TAU); cx.clip();
     const g = cx.createRadialGradient(x, y, r * 0.2, x, y, r); g.addColorStop(0, `rgba(${c0},${rad ? 0.16 : 0.2})`); g.addColorStop(1, `rgba(${c0},${rad ? 0.34 : 0.4})`); cx.fillStyle = g; cx.fillRect(x - r, y - r, r * 2, r * 2);
+    if (rad) radFx(x, y, r, T);
     for (let i = 0; i < 46; i++) { const h = (i * 7919 + 13) % 997 / 997, h2 = (i * 104729 + 7) % 991 / 991, a = h * TAU + (rad ? T * 0.05 : T * 0.02) * (i % 2 ? 1 : -1), d = sqrt(h2) * r * 0.95; const px = x + cos(a) * d + (rad ? 0 : sin(T * 0.6 + i) * 8), py = y + sin(a) * d + (rad ? 0 : T * 6 % 40 - 20 + 0); cx.fillStyle = `rgba(${rad ? '200,255,120' : '230,248,255'},${0.25 + 0.3 * sin(T * 2 + i)})`; cx.beginPath(); cx.arc(px, py, rad ? 3 + (i % 4) : 2 + (i % 3), 0, TAU); cx.fill(); }
     cx.restore();
     cx.strokeStyle = `rgba(${c0},.85)`; cx.lineWidth = 5; cx.setLineDash(rad ? [22, 14] : [4, 12]); cx.lineDashOffset = -T * 20; cx.beginPath(); cx.arc(x, y, r, 0, TAU); cx.stroke(); cx.setLineDash([]); cx.lineDashOffset = 0;

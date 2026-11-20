@@ -21,7 +21,7 @@ const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() <
   // ---- static data ----
   const RC = D.RR_CFG;
   check(D.VERSION >= 6, 'defs: v6');
-  check(RC.base * RC.drain[10] > 14 && RC.base * RC.drain[10] < 22 && RC.drain.every((v, i) => i < 2 || v / RC.drain[i - 1] > 1.1) && RC.drain[2] < 1.6, `steeper drain curve: 2 slots x${RC.drain[2]}, 6 slots x${RC.drain[6]}, 10 slots ${RC.base * RC.drain[10]}/s (was 8/s; v8 reroute rebalance: stronger per square, costlier per square)`);
+  check(RC.base * RC.drain[10] > 24 && RC.base * RC.drain[10] < 30 && RC.drain.every((v, i) => i < 2 || v / RC.drain[i - 1] > 1.1) && RC.drain[2] < 2   /* v9: steeper again */, `steeper drain curve: 2 slots x${RC.drain[2]}, 6 slots x${RC.drain[6]}, 10 slots ${RC.base * RC.drain[10]}/s (was 8/s; v8 reroute rebalance: stronger per square, costlier per square)`);
   check(RC.shHp >= 0.1 && RC.shDr > 0, `shield rerouting adds max shield HP (+${RC.shHp * 100}%/slot) and damage reduction (-${RC.shDr * 100}%/slot)`);
   const gp = D.TREES.gun.ports.map(p => p[0]);
   check(gp.length === 6 && gp.includes('flak') && gp.includes('sniper') && gp.includes('laser'), `gunner has 6 extra ports (v8 added Flak): ${gp.join(', ')}`);
@@ -62,7 +62,7 @@ const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() <
   dev({ op: 'ship', v: { en: 100, lock: 0, pip: [0, 0, 0, 0], swarm: 0, shDown: 0 } }); await sleep(500);
   const base = sh().shm; dev({ op: 'ship', v: { pip: [0, 0, 10, 0] } }); await sleep(500);
   check(sh().shm / base > 2, `10 shield slots more than double max shield HP (${base} -> ${sh().shm})`);
-  check(Math.abs(sh().rd - 18.9) < 0.5, `10 slots drain ${sh().rd}/s`);
+  check(Math.abs(sh().rd - 25.6) < 0.5,   /* v9 */ `10 slots drain ${sh().rd}/s`);
   dev({ op: 'ship', v: { pip: [0, 0, 0, 0] } }); await sleep(300);
   // ---- port upgrades ----
   dev({ op: 'port', r: 3, sl: 0, id: 'mines', lv: 0 }); dev({ op: 'give', cr: 2000 }); dev({ op: 'phase', ph: 'upgrade', secs: 300 }); await sleep(600);

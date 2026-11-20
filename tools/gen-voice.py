@@ -5,13 +5,13 @@ import asyncio, json, os, subprocess, sys, edge_tts
 OUT = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), '..', 'public', 'voice')
 BR = os.environ.get('VBR', '32k')
 COMM = 'highpass=f=120,lowpass=f=7400,acompressor=threshold=-20dB:ratio=2.2:attack=8:release=120'
-V = {  # who: (voice, rate, pitch, ffmpeg filter chain)
-  'finn':     ('en-US-AndrewNeural',       '+0%',  '+0Hz',  COMM),                                   # warm, friendly male (Arctic Fox repair guy)
-  'skids':    ('en-US-EmmaNeural',         '+8%',  '+2Hz',  COMM),                                   # fast, cheerful pilot
-  'boomer':   ('en-AU-WilliamMultilingualNeural', '+0%', '-2Hz', COMM),                            # Aussie kangaroo
-  'mort':     ('en-US-EricNeural',         '-2%',  '-2Hz',  COMM),                                   # dry, rational engineer
-  'ophelia':  ('en-GB-LibbyNeural',        '-3%',  '+0Hz',  COMM),                                   # precise British owl
-  'ember':    ('en-US-JennyNeural',        '+4%',  '-3Hz',  COMM),                                   # sarcastic dragon gladiator
+V = {  # who: (voice, rate, pitch, ffmpeg filter chain). v9: the six player characters speak ~10% faster; Szarkath unchanged
+  'finn':     ('en-US-AndrewNeural',       '+10%',  '+0Hz',  COMM),                                   # warm, friendly male (Arctic Fox repair guy)
+  'skids':    ('en-US-EmmaNeural',         '+18%',  '+2Hz',  COMM),                                   # fast, cheerful pilot
+  'boomer':   ('en-AU-WilliamMultilingualNeural', '+10%', '-2Hz', COMM),                            # Aussie kangaroo
+  'mort':     ('en-US-EricNeural',         '+8%',  '-2Hz',  COMM),                                   # dry, rational engineer
+  'ophelia':  ('en-GB-LibbyNeural',        '+7%',  '+0Hz',  COMM),                                   # precise British owl
+  'ember':    ('en-US-JennyNeural',        '+14%',  '-3Hz',  COMM),                                   # sarcastic dragon gladiator
   'cmd':      ('en-US-RogerNeural',        '-2%',  '+0Hz',  'highpass=f=200,lowpass=f=5200,acompressor=threshold=-22dB:ratio=3'),   # tinny HQ radio
   # Szarkath: the deepest authoritative neural voice found (lowest f0 of every English male voice), slowed, then pitched down with rubberband (formants shifted down = bigger voice),
   # a low shelf, a bit less presence and a touch of reverb. Natural, not a clone of anyone.
