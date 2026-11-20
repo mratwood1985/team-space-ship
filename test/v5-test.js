@@ -11,7 +11,7 @@ function client(room, name, role) {
     c.send = o => ws.send(JSON.stringify(o));
     ws.on('open', () => c.send({ t: 'join', name, cid: 'v5-' + name + Date.now(), room, role }));
     ws.on('message', d => { const m = JSON.parse(d); if (m.t === 'me') { c.me = m; res(c); }
-      if (m.t === 's') { c.last = m; for (const e of m.ev || []) c.evs.push(e); if (m.ph === 'mission') for (const e of m.e || []) if (!c.seen.has(e[0])) c.seen.set(e[0], { t: m.tm || Date.now() / 1000, type: e[1], x: e[2], y: e[3], sx: m.sh.x, sy: m.sh.y, e: m.e.map(q => [q[1], q[2], q[3]]) }); if (m.sh && m.sh.bm) for (const b of m.sh.bm) if (b && b[0] >= 100) c.droneBeam++; } });
+      if (m.t === 's' && m.ph === 'lobby' && !c._st) { c._st = 1; c.send({ t: 'start' }); } if (m.t === 's' && m.ph === 'intro' && !c._rd) { c._rd = 1; c.send({ t: 'ready' }); } if (m.t === 's') { c.last = m; for (const e of m.ev || []) c.evs.push(e); if (m.ph === 'mission') for (const e of m.e || []) if (!c.seen.has(e[0])) c.seen.set(e[0], { t: m.tm || Date.now() / 1000, type: e[1], x: e[2], y: e[3], sx: m.sh.x, sy: m.sh.y, e: m.e.map(q => [q[1], q[2], q[3]]) }); if (m.sh && m.sh.bm) for (const b of m.sh.bm) if (b && b[0] >= 100) c.droneBeam++; } });
     ws.on('error', rej); setTimeout(() => rej(new Error('join timeout')), 8000);
   });
 }

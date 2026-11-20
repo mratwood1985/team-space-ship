@@ -11,7 +11,7 @@ function client(room, name, role) {
     const ws = new WebSocket(wsUrl); const c = { ws, me: null, snaps: 0, last: null, evs: {}, abs: [], phases: [], toasts: [] };
     c.send = o => ws.send(JSON.stringify(o));
     ws.on('open', () => c.send({ t: 'join', name, cid: 'test-' + name + Date.now(), room, role }));
-    ws.on('message', d => { const m = JSON.parse(d); if (m.t === 'me') { c.me = m; res(c); } if (m.t === 'toast') c.toasts.push(m.m); if (m.t === 's') { c.snaps++; c.last = m; if (c.phases[c.phases.length - 1] !== m.ph) c.phases.push(m.ph); for (const e of m.ev) { c.evs[e[0]] = (c.evs[e[0]] || 0) + 1; if (e[0] === 'ab') c.abs.push(e[2]); } } });
+    ws.on('message', d => { const m = JSON.parse(d); if (m.t === 'me') { c.me = m; res(c); } if (m.t === 'toast') c.toasts.push(m.m); if (m.t === 's' && m.ph === 'lobby' && !c._st) { c._st = 1; c.send({ t: 'start' }); } if (m.t === 's' && m.ph === 'intro' && !c._rd) { c._rd = 1; c.send({ t: 'ready' }); } if (m.t === 's') { c.snaps++; c.last = m; if (c.phases[c.phases.length - 1] !== m.ph) c.phases.push(m.ph); for (const e of m.ev) { c.evs[e[0]] = (c.evs[e[0]] || 0) + 1; if (e[0] === 'ab') c.abs.push(e[2]); } } });
     ws.on('error', rej); setTimeout(() => rej(new Error('join timeout')), 8000);
   });
 }

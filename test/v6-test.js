@@ -11,7 +11,7 @@ function client(room, name, role) {
     const ws = new WebSocket(wsUrl); const c = { ws, me: null, last: null, evs: [], toasts: [] };
     c.send = o => ws.send(JSON.stringify(o));
     ws.on('open', () => c.send({ t: 'join', name, cid: 'v6-' + name + Date.now(), room, role }));
-    ws.on('message', d => { const m = JSON.parse(d); if (m.t === 'me') { c.me = m; res(c); } if (m.t === 'toast') c.toasts.push(m.m); if (m.t === 's') { c.last = m; for (const e of m.ev || []) c.evs.push(e); } });
+    ws.on('message', d => { const m = JSON.parse(d); if (m.t === 'me') { c.me = m; res(c); } if (m.t === 'toast') c.toasts.push(m.m); if (m.t === 's' && m.ph === 'lobby' && !c._st) { c._st = 1; c.send({ t: 'start' }); } if (m.t === 's' && m.ph === 'intro' && !c._rd) { c._rd = 1; c.send({ t: 'ready' }); } if (m.t === 's') { c.last = m; for (const e of m.ev || []) c.evs.push(e); } });
     ws.on('error', rej); setTimeout(() => rej(new Error('join timeout')), 8000);
   });
 }

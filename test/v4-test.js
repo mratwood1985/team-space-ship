@@ -10,7 +10,7 @@ function client(room, name, role) {
     c.send = o => ws.send(JSON.stringify(o));
     ws.on('open', () => c.send({ t: 'join', name, cid: 'v4-' + name + Date.now(), room, role }));
     ws.on('message', d => { const m = JSON.parse(d); if (m.t === 'me') { c.me = m; res(c); }
-      if (m.t === 's') { c.last = m; for (const e of m.ev || []) c.evs.push(e); if (m.sh && m.sh.eb) { } for (const b of m.eb || []) { const a = c.eb.get(b[0]) || []; a.push([m.tm || Date.now() / 1000, b]); c.eb.set(b[0], a); } } });
+      if (m.t === 's' && m.ph === 'lobby' && !c._st) { c._st = 1; c.send({ t: 'start' }); } if (m.t === 's' && m.ph === 'intro' && !c._rd) { c._rd = 1; c.send({ t: 'ready' }); } if (m.t === 's') { c.last = m; for (const e of m.ev || []) c.evs.push(e); if (m.sh && m.sh.eb) { } for (const b of m.eb || []) { const a = c.eb.get(b[0]) || []; a.push([m.tm || Date.now() / 1000, b]); c.eb.set(b[0], a); } } });
     ws.on('error', rej); setTimeout(() => rej(new Error('join timeout')), 8000);
   });
 }
