@@ -517,7 +517,7 @@ function interp() {
   o.eb = b.eb.map(q => { if (q[7]) { const p = a.bMap.get(q[0]); return p ? [q[0], L(p, q, 1), L(p, q, 2), q[3], q[4], q[5]] : q; }
     const dt_ = rt - b.tm, d_ = q[6] * (a.bMap.has(q[0]) ? dt_ : max(0, dt_)); return [q[0], q[1] + cos(q[3]) * d_, q[2] + sin(q[3]) * d_, q[3], q[4], q[5]]; }); // v4: non-homing shots are extrapolated along one straight line
   o.pp = b.pp.map(q => { const p = a.pMap.get(q[0]); return p ? [q[0], L(p, q, 1), L(p, q, 2), lerpA(p[3], q[3], t), q[4]] : q; });
-  o.al = b.al.map(q => { const p = a.aMap.get(q[0]); return p ? [q[0], q[1], L(p, q, 2), L(p, q, 3), lerpA(p[4], q[4], t), q[5], q[6], lerpA(p[7], q[7], t), q[8]] : q; });
+  o.al = b.al.map(q => { const p = a.aMap.get(q[0]); return p ? [q[0], q[1], L(p, q, 2), L(p, q, 3), lerpA(p[4], q[4], t), q[5], q[6], lerpA(p[7], q[7], t), q[8], q[9]] : q; });
   o.wv = b.wv; o.pk = b.pk.map(q => { const p = a.kMap.get(q[0]); return p ? [q[0], L(p, q, 1), L(p, q, 2), q[3]] : q; });
   while (snaps.length > 2 && snaps[1].tm < rt - 0.5) snaps.shift();
   return o;
@@ -1515,7 +1515,8 @@ function v8World(o, T, view) {
 // ----- strafe thrusters + hazard tint on the player ship
 function v8Ship(o, T) {
   const sh = o.sh; if (sh.dead || !sh.lat || abs(sh.lat) < 4) return; const G = GEO[o.s.mk], ca = cos(o.a), sa = sin(o.a), side = sh.lat > 0 ? -1 : 1, f = min(1, abs(sh.lat) / 46);
-  for (const lx of [G.hr * 0.45, -G.hr * 0.45]) { const ly = side * (G.hr * 0.55), wx = o.x + lx * ca - ly * sa, wy = o.y + lx * sa + ly * ca, r = 7 + 9 * f + random() * 2; cx.drawImage(glow('#aeeeff', 20), wx - r, wy - r, r * 2, r * 2);
+  const mv = o.a + (sh.lat > 0 ? PI / 2 : -PI / 2);   // direction we are drifting; the plume streams the other way
+  for (const lx of [G.hr * 0.45, -G.hr * 0.45]) { const ly = side * (G.hr * 0.55), wx = o.x + lx * ca - ly * sa, wy = o.y + lx * sa + ly * ca, r = 9 + 9 * f + random() * 2; cx.drawImage(glow('#aeeeff', 24), wx - r * 1.4, wy - r * 1.4, r * 2.8, r * 2.8); flame(wx, wy, mv, 14 + 22 * f, 3.4, '#4fc8ff', '#ffffff');
     if (random() < 0.6) P({ k: 0, x: wx, y: wy, vx: -sa * side * 90 + (random() - 0.5) * 20, vy: ca * side * 90 + (random() - 0.5) * 20, life: 0.3, max: 0.3, s: 2, c: '#cfeeff' }); }
 }
 // ----- HUD: hazard vignette, radar
