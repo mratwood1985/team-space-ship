@@ -1,4 +1,4 @@
-// Spacebelts Optional v7: cast, story and dialogue (shared by the server (require) and the client (window.STORY)). Text only: the server sends compact event ids.
+// Spacebelts Optional v8: cast, story and dialogue (shared by the server (require) and the client (window.STORY)). Text only: the server sends compact event ids.
 (function (root) {
 const TITLE = 'Spacebelts Optional';
 const TAGLINE = 'Six crew members. An unknown sector. Zero safety standards. Let\u2019s do this\u2014what could possibly go wrong?';
@@ -95,10 +95,26 @@ const chapterOf = n => n >= 1 && n <= 12 ? CHAPTERS[n] : null;
 const SEQ12 = CHAPTERS.slice(1).map(c => c.type);
 // v7.1 voices (public/voice/*.mp3): the clip id of a cutscene line (only short lines are voiced, long ones stay text-only), and which fixed commander line each named commander says
 const VOICE_MAX = 65;
+// v8: the short arrival cutscene before mission 1 (private ships: after the lobby; public ship: the first time you join a fresh run)
+const INTRO = [
+  ['skids', 'Jump complete! Nobody touch anything. Everyone alive?'],
+  ['ophelia', 'All sections report in. This is the Hollow Reach, unmapped.'],
+  ['mort', 'The reactor says it feels watched. It always says that.'],
+  ['finn', 'Old wreckage, odd lights and very rude radio static.'],
+  ['boomer', 'Unknown sector, no map, no backup. Brilliant. Where do I aim?'],
+  ['ember', 'At whatever aims at us first.'],
+  ['cmd', 'Hostile movement near first contact. Pick a target and go.'],
+];
+// v8: the pilot explains each hazard zone only the first time a run meets it
+const ZONE_LINES = {
+  rad: 'Heads up! That green haze is a radioactive cloud. It burns the hull for as long as we sit in it. Cross it fast, or go around.',
+  cold: 'Careful, that blue fog is a cold nebula. Everything stiffens up in there and we crawl. Get out quick, or avoid it.',
+  well: 'Gravity well! That purple dot swallows missiles, mines, bombs and drones inside its circle. Lasers and ships are fine, so keep shooting and mind your drones.',
+};
 const csId = (ch, k, i) => 'cs_' + ch + '_' + k + '_' + i;
-const csLines = () => { const L = []; for (let c = 1; c <= 12; c++) for (const k of ['pre', 'post']) (CHAPTERS[c][k] || []).forEach((l, i) => L.push([csId(c, k, i), l[0], l[1]])); EPILOGUE.forEach((l, i) => L.push([csId('ep', 'e', i), l[0], l[1]])); return L; };
+const csLines = () => { const L = []; for (let c = 1; c <= 12; c++) for (const k of ['pre', 'post']) (CHAPTERS[c][k] || []).forEach((l, i) => L.push([csId(c, k, i), l[0], l[1]])); EPILOGUE.forEach((l, i) => L.push([csId('ep', 'e', i), l[0], l[1]])); INTRO.forEach((l, i) => L.push([csId('intro', 'i', i), l[0], l[1]])); return L; };
 const CMD_INTRO_BY = { kraal: 0, durmok: 1, grakk: 3, sskarra: 4 }, CMD_DEATH_BY = { kraal: 4, durmok: 0, grakk: 1, sskarra: 3 };
 const cmdLine = (key, kind, r) => { const by = kind === 'i' ? CMD_INTRO_BY : CMD_DEATH_BY, n = kind === 'i' ? CMD_INTRO.length : CMD_DEATH.length; return key in by ? by[key] : (r || 0) % n; };
-const out = { VOICE_MAX, csId, csLines, CMD_INTRO_BY, CMD_DEATH_BY, cmdLine, TITLE, TAGLINE, SHIP, CREW, RACES, CMDRS, LTS, cmdInfo, VILLAIN, CATS, WHO, CHAPTERS, EPILOGUE, TAUNTS, SENDS, CAT_COMMS, CMD_INTRO, CMD_DEATH, BOSS_LINES, FINN_LINES, chapterOf, SEQ12 };
+const out = { VOICE_MAX, csId, csLines, CMD_INTRO_BY, CMD_DEATH_BY, cmdLine, TITLE, TAGLINE, SHIP, CREW, RACES, CMDRS, LTS, cmdInfo, VILLAIN, CATS, WHO, CHAPTERS, EPILOGUE, TAUNTS, SENDS, CAT_COMMS, CMD_INTRO, CMD_DEATH, BOSS_LINES, FINN_LINES, chapterOf, SEQ12, INTRO, ZONE_LINES };
 if (typeof module !== 'undefined' && module.exports) module.exports = out; else root.STORY = out;
 })(typeof window !== 'undefined' ? window : globalThis);

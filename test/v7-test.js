@@ -34,8 +34,8 @@ const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() <
   check(D.ELITE.eff > 1 && D.ELITE.per > 1 && D.ELITE.maxLv > 0 && D.PORT_COST[2] > D.PORT_COST[1], `elite 4th ports: x${D.ELITE.eff} effect, x${D.ELITE.per} upgrades, +${D.ELITE.maxLv} max levels, ${D.PORT_COST[2]}c`);
   check(D.WEAP.ion.t === 3 && D.WEAP.ion.cd >= 9 && D.WEAP.ion.spd >= 380 && D.WEAP.ion.life * D.WEAP.ion.spd >= 1500 && D.ION_STUN === 3, `ion bolt: blue (t3), speed ${D.WEAP.ion.spd}, range ${D.WEAP.ion.life * D.WEAP.ion.spd} px, cd ${D.WEAP.ion.cd}s, stun ${D.ION_STUN}s`);
   const ionPorts = D.ETYPES.filter(t => t.ports && t.ports.some(p => p.w === 'ion')).map(t => t.id), ionFighters = D.ETYPES.filter(t => t.g && t.g.w === 'ion').map(t => t.id);
-  check(ionFighters.length === 1 && ionPorts.every(i => ['destroyer', 'dreadnought', 'station', 'overlord'].includes(i)), `ion is rare: one fighter (${ionFighters}), one port on ${ionPorts.join(', ')}`);
-  check(D.ETYPES[19].id === 'overlord' && D.ETYPES[19].ports.length === 14 && D.ETYPES[19].sh >= 400 && D.ETYPES[19].php > D.ETYPES[17].php, 'final boss: Drowned Throne, 14 hard-points, big shield, tougher than the dreadnought');
+  check(ionFighters.length === 1 && ionPorts.every(i => ['destroyer', 'dreadnought', 'station', 'overlord', 'rockfort', 'ringstation', 'crossstation', 'spindle'].includes(i)), `ion is rare: one fighter (${ionFighters}), one port on ${ionPorts.join(', ')}`);
+  check(D.ETYPES[19].id === 'overlord' && D.ETYPES[19].ports.length >= 14 && D.ETYPES[19].sh >= 400 && D.ETYPES[19].php * D.ETYPES[19].ports.length > D.ETYPES[17].php * D.ETYPES[17].ports.length, 'final boss: Drowned Throne, 14+ hard-points (v8: 33), big shield, tougher in total than the dreadnought');
   let rowOK = true; for (const k in D.TREES) { const r = D.TREES[k].rows[1]; for (const i of [1, 3]) if (r[i].ab || !r[i].sac || !/bonus for giving up/.test(r[i].d)) rowOK = false; r.forEach((n, i) => { if (n.ab && n.sac) rowOK = false; }); }
   check(rowOK, 'pyramid row 2: the 2nd and 4th nodes of all five trees carry a compensating bonus');
   for (const k in D.TREES) { const r = D.TREES[k].rows[1]; console.log('  ' + k + ': ' + r[1].n + ' / ' + r[3].n + ' -> ' + r[1].d.replace(' · bonus for giving up an ability', '') + ' | ' + r[3].d.replace(' · bonus for giving up an ability', '')); }
@@ -80,7 +80,7 @@ const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() <
   await startMission({ type: 'survival', level: 8, kind: 'main', ch: 9 }); dev({ op: 'mset', v: { vT: 0.1, catT: 0.1 } }); await sleep(900);
   check(E.evs.some(e => e[0] === 'comm' && e[1] === 'v') && E.evs.some(e => e[0] === 'comm' && e[1] === 'c'), 'villain taunt + Mireth chatter events in a main mission');
   await startMission({ type: 'finale', level: 12, kind: 'main', ch: 12 }); await sleep(900);
-  const boss = E.last.e.find(e => e[1] === 19); check(!!boss && boss[12] === 99 && boss[8].length === 14 && boss[9] > 0.99, 'finale: Drowned Throne spawned (14 ports, shield, commander id 99)');
+  const boss = E.last.e.find(e => e[1] === 19); check(!!boss && boss[12] === 99 && boss[8].length >= 14 && boss[9] > 0.99, 'finale: Drowned Throne spawned (14 ports, shield, commander id 99)');
   dev({ op: 'ship', v: { x: 0, y: 0 } }); await sleep(300);
   check(E.evs.some(e => e[0] === 'cmd' && e[1] === 99 && e[2] === 0), 'villain boss intro event');
   clearInterval(tick); [E, R, S].forEach(c => c.ws.close());

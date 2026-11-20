@@ -21,12 +21,12 @@ const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() <
   // ---- static data ----
   const RC = D.RR_CFG;
   check(D.VERSION >= 6, 'defs: v6');
-  check(RC.base * RC.drain[10] === 14 && RC.drain.every((v, i) => i < 2 || v / RC.drain[i - 1] > 1.1) && RC.drain[2] < 1.2, `steeper drain curve: 2 slots x${RC.drain[2]}, 6 slots x${RC.drain[6]}, 10 slots ${RC.base * RC.drain[10]}/s (was 8/s)`);
+  check(RC.base * RC.drain[10] > 14 && RC.base * RC.drain[10] < 22 && RC.drain.every((v, i) => i < 2 || v / RC.drain[i - 1] > 1.1) && RC.drain[2] < 1.6, `steeper drain curve: 2 slots x${RC.drain[2]}, 6 slots x${RC.drain[6]}, 10 slots ${RC.base * RC.drain[10]}/s (was 8/s; v8 reroute rebalance: stronger per square, costlier per square)`);
   check(RC.shHp >= 0.1 && RC.shDr > 0, `shield rerouting adds max shield HP (+${RC.shHp * 100}%/slot) and damage reduction (-${RC.shDr * 100}%/slot)`);
   const gp = D.TREES.gun.ports.map(p => p[0]);
-  check(gp.length === 5 && gp.includes('sniper') && gp.includes('laser'), `gunner has 5 extra ports: ${gp.join(', ')}`);
+  check(gp.length === 6 && gp.includes('flak') && gp.includes('sniper') && gp.includes('laser'), `gunner has 6 extra ports (v8 added Flak): ${gp.join(', ')}`);
   check(Object.values(D.PORT_UPS).every(l => l.length >= 2 && l.some(o => o.o === 'hp') && !l.some(o => /effect/i.test(o.n))), 'every port has its own upgrade options + Section HP, no generic "Port effect"');
-  check(Object.keys(D.PORT_UPS).length === 17 && D.PORT_UPS['pilot.twin'].some(o => o.o === 'pierce') && D.PORT_UPS['engineer.aux'].some(o => o.o === 'eff'), 'port-specific options exist (17 ports)');
+  check(Object.keys(D.PORT_UPS).length >= 30 && D.PORT_UPS['pilot.twin'].some(o => o.o === 'pierce') && D.PORT_UPS['engineer.aux'].some(o => o.o === 'eff'), 'port-specific options exist (30 ports in v8)');
   check(D.ETYPES[18].id === 'kamikaze' && D.ETYPES[18].minL === 6, 'kamikaze bomb ship: appears from level 6');
   check(['survival', 'bombrun', 'siege'].every(t => D.MTYPES[t] && D.MTYPES[t].adv), 'three new mission types for level 10+');
   const gsrc = fs.readFileSync(__dirname + '/../public/game.js', 'utf8');
@@ -61,8 +61,8 @@ const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() <
   // ---- drain + shield rerouting ----
   dev({ op: 'ship', v: { en: 100, lock: 0, pip: [0, 0, 0, 0], swarm: 0, shDown: 0 } }); await sleep(500);
   const base = sh().shm; dev({ op: 'ship', v: { pip: [0, 0, 10, 0] } }); await sleep(500);
-  check(Math.abs(sh().shm / base - 2) < 0.05, `10 shield slots double max shield HP (${base} -> ${sh().shm})`);
-  check(Math.abs(sh().rd - 14) < 0.3, `10 slots drain ${sh().rd}/s`);
+  check(sh().shm / base > 2, `10 shield slots more than double max shield HP (${base} -> ${sh().shm})`);
+  check(Math.abs(sh().rd - 18.9) < 0.5, `10 slots drain ${sh().rd}/s`);
   dev({ op: 'ship', v: { pip: [0, 0, 0, 0] } }); await sleep(300);
   // ---- port upgrades ----
   dev({ op: 'port', r: 3, sl: 0, id: 'mines', lv: 0 }); dev({ op: 'give', cr: 2000 }); dev({ op: 'phase', ph: 'upgrade', secs: 300 }); await sleep(600);
@@ -105,7 +105,7 @@ const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() <
   check(await until(() => E.last.e.some(e => e[1] === 18), 25000), `bombrun spawns kamikaze ships (waves ${mi().waves})`);
   await sleep(500); dev({ op: 'phase', ph: 'map' }); await sleep(300);
   check(await startMission('siege', 12), 'Twin Fortress Siege L12 started'); dev({ op: 'ship', v: { inv: 999 } }); await sleep(1500);
-  check(E.last.e.filter(e => e[1] === 9).length === 2, 'siege: two fortress stations');
+  check(E.last.e.filter(e => D.STATION_TYPES.includes(e[1])).length === 2, 'siege: two fortress stations');
   E.evs.length = 0; dev({ op: 'clear' }); check(await until(() => E.evs.some(e => e[0] === 'win'), 5000), 'destroying both fortresses wins');
   await sleep(500); dev({ op: 'phase', ph: 'map' }); await sleep(300);
   check(await startMission('pirates', 12), 'pirates L12 started'); check(mi().ext === 1 && mi().waves >= 5, `extended pirates: ${mi().waves} waves at level 12 (ext)`);

@@ -7,7 +7,7 @@ const EFIRE_WEAK_LV = 5, EFIRE_WEAK = 0.6; // enemy fire does 60% damage on miss
 const REPAIR_CFG = { base: 20, drone: 1.5, mgMax: 1.0, clickDiv: 300, botCps: 1.5 }; // repair: base seconds per section, drone-off speed multiplier, minigame max bonus, click strength on the Repair Bay
 const MONEY_MULT = 1.1;                   // v5: about 10% more credits for everyone
 // v5 power rerouting (Engineer): 10 slots in total over 4 options. Drain per second = base * DRAIN[slots used]; the generator regenerates `base` per second at the start (= exactly 1 slot).
-const RR_CFG = { max: 10, base: 2.0, drain: [0, 1.35, 1.54, 1.82, 2.23, 2.77, 3.51, 4.46, 5.67, 7.29, 9.45], regenCap: 3.0, lock: 20, lockThr: 0.25,
+const RR_CFG = { max: 10, base: 2.0, drain: [0, 1, 1.54, 1.82, 2.23, 2.77, 3.51, 4.46, 5.67, 7.29, 9.45], regenCap: 3.0, lock: 20, lockThr: 0.25,
   eng: 0.0225, acc: 0.12, wpn: 0.075, shd: 0.15, rep: 0.045, shHp: 0.15, shDr: 0.05 };   // v8: every filled square is 1.5x stronger but drains 1.35x more energy (see drain[]); Conduits / Efficient Routing / the Surge Coupler port improve the deal
    // v6: steeper drain curve (10 slots = 14/s). shd = recharge speed per slot; shHp = +max shield HP per slot; shDr = shield damage reduction per slot    // per slot: top speed, throttle response, gun fire rate, shield recharge speed, repair speed
 const RR_NAMES = ['ENGINES', 'WEAPONS', 'SHIELDS', 'REPAIR'];
@@ -351,7 +351,7 @@ const ETYPES = [
 const STATION_TYPES = [9, 20, 21, 22, 23];
 const isStation = t => STATION_TYPES.includes(t);
 // v8 hazards: zones are circles. Radiation burns the hull (hull points per second); cold slows the ship; gravity wells (aoe radius R, deadly core) swallow physical projectiles only
-const HAZ = { rad: { n: 'Radioactive cloud', dps: 0.3, col: '120,255,60' }, cold: { n: 'Cold nebula', slow: 0.42, col: '110,200,255' } };
+const HAZ = { rad: { n: 'Radioactive cloud', dps: 0.6, col: '120,255,60' }, cold: { n: 'Cold nebula', slow: 0.42, col: '110,200,255' } };
 const WELL = { R: 300, core: 26, pull: 640 };
 const PLANET_A = ['Kor', 'Vel', 'Tha', 'Ix', 'Mor', 'Zan', 'Dra', 'Cyr', 'Ul', 'Esk', 'Bes', 'Nar', 'Ord', 'Yav', 'Kes', 'Tal', 'Ryl', 'Sul', 'Ost', 'Mav'];
 const PLANET_B = ['a', 'o', 'u', 'e', 'i', 'ae', 'ou', 'y'];

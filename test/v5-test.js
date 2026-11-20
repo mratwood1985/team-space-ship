@@ -22,7 +22,7 @@ const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() <
   const RC = D.RR_CFG;
   check(D.VERSION >= 5 && D.MONEY_MULT === 1.1, 'defs: v5, money x1.1');
   check(RC.max === 10 && RC.drain.length === 11 && RC.drain.every((v, i) => i === 0 || v >= RC.drain[i - 1]) && RC.drain[1] === 1, 'drain table: 10 slots, rising with every slot, 1 slot = exactly the starting regen');
-  check(RC.base * RC.drain[10] > RC.base * RC.regenCap && RC.base * RC.drain[2] > RC.base && RC.base * RC.drain[2] < RC.base * 1.15, `10 slots always outdrain the best generator (${(RC.base * RC.drain[10]).toFixed(1)}/s vs max regen ${(RC.base * RC.regenCap).toFixed(1)}/s); 2 slots drop very slowly (-${(RC.base * (RC.drain[2] - 1)).toFixed(2)}/s)`);
+  check(RC.base * RC.drain[10] > RC.base * RC.regenCap && RC.base * RC.drain[2] > RC.base && RC.base * RC.drain[2] < RC.base * 1.6, `10 slots always outdrain the best generator (${(RC.base * RC.drain[10]).toFixed(1)}/s vs max regen ${(RC.base * RC.regenCap).toFixed(1)}/s); 2 slots drop very slowly (-${(RC.base * (RC.drain[2] - 1)).toFixed(2)}/s)`);
   check(D.INNATE.engineer === 'bomb' && !D.ABIL.reroute && D.BOMB_CFG.cd > 0, 'bomb is the engineer\'s innate ability on its own cooldown; old reroute ability is gone');
   const code = 'V5' + (Date.now() % 10000);
   const E = await client(code, 'Eng', 3), R = await client(code, 'Rep', 2);
@@ -39,7 +39,7 @@ const until = async (fn, ms) => { const d = Date.now() + ms; while (Date.now() <
   acts(E, ['u1']); await sleep(500); check(E.last.sh.pip[0] === 1 && E.last.sh.eu === 1, 'u1 adds one engine slot');
   const e1 = E.last.sh.en; await sleep(3000); check(Math.abs(E.last.sh.en - e1) < 0.8, `1 slot is exactly sustained by the starting generator (energy ${e1} -> ${E.last.sh.en})`);
   acts(E, ['u2']); await sleep(400); const e2 = E.last.sh.en; await sleep(5000); const d2 = (e2 - E.last.sh.en) / 5;
-  check(d2 > 0.02 && d2 < 0.6, `2 slots: the bar starts dropping very slowly (-${d2.toFixed(2)}/s)`);
+  check(d2 > 0.02 && d2 < 1.3, `2 slots: the bar starts dropping very slowly (-${d2.toFixed(2)}/s)`);
   for (let i = 0; i < 14; i++) { acts(E, ['u' + (1 + i % 4)]); await sleep(120); }
   sh = E.last.sh; check(sh.pip.reduce((a, b) => a + b, 0) === 10 && sh.eu === 10 && sh.pip.every(v => v >= 0 && v <= 10), `never more than 10 slots in total: ${JSON.stringify(sh.pip)} (14 attempts)`);
   check(Math.abs(sh.rd - RC.base * RC.drain[10]) < 0.2 && sh.rd > sh.rg, `10 slots: drain ${sh.rd}/s is the maximum and exceeds regen ${sh.rg}/s`);

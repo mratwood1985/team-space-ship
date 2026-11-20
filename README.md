@@ -27,6 +27,21 @@ npm test           # websocket integration test against localhost:8080
 - `test/ws-test.js`: integration test (`npm test`; run the server with `DEV_TOOLS=1` to also exercise purchases, ports, Mk upgrades and spawned enemies)
 - `test/shot-v3.js`: staged headless screenshots (ship tiers, shield arc, pyramid, docks, planets); `test/shot-flow.js`: play-through screenshots incl. mobile (need Chrome + puppeteer-core)
 
+## What is new in v8 (update number 7)
+`/health` reports `v:8`. Tests: `test/v8-test.js` (needs `DEV_TOOLS=1`), screenshots: `test/shot-v8.js` (needs Chrome).
+- **Final boss, the Drowned Throne:** now 2.1x bigger with 33 destroyable ports (lances, batteries, flak, missile racks, docks, shield projectors), a bigger shield and three phases.
+- **Esc menu** (Resume / Restart Game / Help / Sound / Music / Leave). Restart resets the campaign, upgrades, ports and credits and returns a private ship to the lobby (the public ship only restarts when you are alone on it).
+- **Lobby + arrival cutscene (private ships):** up to 6 players pick characters (no duplicates), empty seats are bots, Start launches together, then a short voiced story scene about arriving in the unknown Hollow Reach before mission 1. The public ship skips the lobby and plays the scene once for a fresh run.
+- **Bigger enemies at higher levels** (ships grow with level, up to 1.5x; stations, rocks, mines and kamikazes keep their size). **Portless fighters fly in squadrons of 3-6** (V, or a triangle for six).
+- **Left-side text feed** replaces the repair crew's spoken "port destroyed" calls. **Radar** (upper right) shows enemies (red) and friendlies (blue/green/yellow), hazard zones and wells.
+- **Strafe thrusters (pilot, Z / X):** weak, slow sideways shift, not a port, cannot be destroyed, off when the engines are down.
+- **Engineer rerouting:** each filled square gives a stronger effect, costs more energy per square; the reroute upgrades improve the trade.
+- **Port upgrades:** Port 1, 2 and 3 now each offer their own two options per role (no repeats across slots). New ports: Homing Missiles, Pulse Array, Lance Cannon (pilot); Flak Turret (gunners); Surge Coupler, Flare Dispenser, Booster Nozzles (engineer); Arc Lens, Ion Capacitor, Ablative Plating (shield); Repair Nanites, Emergency Foam, Magnet Drones (repair). Scatter Turrets get a Range upgrade.
+- **Hazard zones:** radioactive (damage over time) and cold (slows). The pilot explains each type only the first time per run. **Gravity wells:** black-and-purple dot with a clearly drawn circular area (300 px). They pull and swallow missiles, rockets, mines, bombs and drones (not lasers, ion bolts or ships). New mission *Gravity Trap* (station ringed by wells; wells never overlap a station).
+- **More stations:** asteroid fortress, ring, cross, spindle (plus 3 friendly outpost looks) and the new mission *Twin Outposts* (defend two stations in different areas).
+- **Pilot weapons are bright yellow** (nose lasers, rockets, missiles, Lance). **Homing Missiles:** fast, long range, arc around to hit from behind, fired 45 degrees off the nose alternating left/right; slower than the main guns, faster than the rocket turret, slightly weaker than rockets.
+- Dev ops added: `squad`. Voice: the port-down clips were removed; `pz_*` hazard briefings and the cutscene lines were added.
+
 ## v7.1: human voices + HUD portrait
 - **Prerecorded neural voices** (`public/voice/*.mp3`, 112 clips, ~1.3 MB, mono 24 kHz / 24 kbps MP3). Generated on a box with **edge-tts** (Microsoft neural voices, free, no key) by `tools/voice-manifest.js | python3 tools/gen-voice.py`, then a light radio filter (gentle band limit + soft compression). Lazy-loaded on first use (the Finn callouts are prefetched when the first mission starts) and played through WebAudio, so they follow the game volume and mute.
 - **Voices:** Finn en-US-Andrew (warm, friendly, natural rate, no pitch-down); Skids en-US-Emma; Boomer en-AU-William; Mort en-US-Eric; Ophelia en-GB-Libby; Ember en-US-Jenny; Tavi en-US-Ana; Ishkara en-AU-Natasha; Command en-US-Roger (tinny radio); Kraal en-US-Guy; Durmok en-GB-Thomas; Grakk en-CA-Liam; Admiral Sskarra en-GB-Sonia; lieutenants en-US-Steffan. **Szarkath:** the deepest authoritative neural voice available (en-US-Christopher, lowest pitch of every English male voice), slowed 14%, pitched down ~3 semitones with formant-shifting (rubberband) to ~90 Hz, low shelf + a touch of reverb. Not a clone of anyone.
@@ -93,8 +108,8 @@ Tests: `test/v7-test.js` (needs `DEV_TOOLS=1`), `test/shot-v7.js` (screenshots, 
 - **Bigger view**, 12 planet kinds drawn with lit fractal noise, a distinct hull for Mk I / II / III.
 
 ## Controls
-Common: **A / S / D** abilities (were Q/E/R; slot 1/2/3) (picked in the skill pyramid, U), Tab switch role, H help, M mute, N music. Station destroyed? The Repair player clicks it to repair it. Repair Bay destroyed? Everybody else mashes CLICK RAPIDLY.
-- Pilot: aim to steer, click nose laser. A Barrel Roll (built in), S/D from the pyramid (Lock-On Volley, Battle Cry, Flare Burst, Strafing Run, Rally Point)
+Common: **Esc** menu (Resume / Restart Game), **A / S / D** abilities (were Q/E/R; slot 1/2/3) (picked in the skill pyramid, U), Tab switch role, H help, M mute, N music. Station destroyed? The Repair player clicks it to repair it. Repair Bay destroyed? Everybody else mashes CLICK RAPIDLY.
+- Pilot: aim to steer, click nose laser (yellow), **Z / X strafe thrusters**. A Barrel Roll (built in), S/D from the pyramid (Lock-On Volley, Battle Cry, Flare Burst, Strafing Run, Rally Point)
 - Gunners: aim + click, each gunner fires their own turret and port turrets. A Rapid Fire, then Flak Screen, Overcharge, Target Paint, Barrage, Deadeye, Suppressive Fire
 - Engineer: Up/Down arrows or mouse wheel = throttle (only the engineer controls speed; W/S moved so A/S/D are free), 1-4 add a rerouting slot (Shift removes, C clears). A Proton Bomb, then Afterburner, Micro-Jump, Seismic Charge, Power Surge
 - Shields: aim the arc (it stays where you point it). A Fortify, then Barrier Bubble, Shield Lance, Energy Vent, Aegis Link, Nova Lance, Emergency Reboot

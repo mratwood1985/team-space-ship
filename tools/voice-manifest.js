@@ -2,8 +2,8 @@
 const S = require('../public/story.js'), D = require('../public/defs.js');
 const slug = n => String(n).toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
 const L = [];
-const names = new Set(D.PORT_NAMES); for (const t in D.TREES) D.TREES[t].ports.forEach(p => names.add(p[1]));
-for (const n of names) L.push({ id: 'finn_' + slug(n), who: 'finn', text: n + ' is down.' });
+// v8: the repair crew no longer announces destroyed ports by voice (a text feed on the left of the screen does that); the pilot explains each hazard zone type once
+for (const k of ['rad', 'cold', 'well']) L.push({ id: 'pz_' + k, who: 'skids', text: S.ZONE_LINES[k] });
 L.push({ id: 'finn_half', who: 'finn', text: 'Hull at fifty percent. We are halfway to a very bad day.' });
 L.push({ id: 'finn_low', who: 'finn', text: 'Hull critical! Everybody say a quiet thing.' });
 S.TAUNTS.forEach((t, i) => L.push({ id: 'vt' + i, who: 'szarkath', text: t }));

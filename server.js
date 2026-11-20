@@ -1311,6 +1311,7 @@ function devOp(R, c, m) {
   else if (m.op === 'give') { c.prof.cr += m.cr | 0; R.cores += m.cores | 0; c.dirty = 1; }
   else if (m.op === 'phase') { R.phase = m.ph; R.phaseT = m.secs || 40; if (m.ph === 'upgrade') R.result = R.result || { win: 1, bonus: 30, cores: 1, name: 'Test', type: 'pirates' }; c.dirty = 1; }
   else if (m.op === 'spawn') { const a = +m.a || 0, d = +m.d || 700; const e = R.addEnemy(m.type | 0, s.x + cos(a) * d, s.y + sin(a) * d, m.L || 8, 'dom', true); e.a = a + PI; if (m.static) e.cd = 1e9; if (m.hpx) { e.hp *= m.hpx; e.mhp *= m.hpx; } }
+  else if (m.op === 'squad') { const a = +m.a || 0, d = +m.d || 1100; R.spawnSquad(m.type | 0 || 1, { x: s.x + cos(a) * d, y: s.y + sin(a) * d }, m.L || 8, 'dom', m.n | 0 || 5); }   // v8 dev: spawn a V / triangle squadron
   else if (m.op === 'clear') { R.enemies = []; R.eb = []; }
   else if (m.op === 'ionhit') R.hitShip(s.x, s.y, 1, 1, { t: 3 });   // v7 dev: the ship takes an ion hit (stun)
   else if (m.op === 'estun') { for (const e of R.enemies) e.stun = +m.v || 3; }
