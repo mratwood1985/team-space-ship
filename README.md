@@ -27,6 +27,20 @@ npm test           # websocket integration test against localhost:8080
 - `test/ws-test.js`: integration test (`npm test`; run the server with `DEV_TOOLS=1` to also exercise purchases, ports, Mk upgrades and spawned enemies)
 - `test/shot-v3.js`: staged headless screenshots (ship tiers, shield arc, pyramid, docks, planets); `test/shot-flow.js`: play-through screenshots incl. mobile (need Chrome + puppeteer-core)
 
+## What is new in v9 (update number 8)
+- **Fresh runs:** every new run (a new ship, or a restart) starts every player at **0 credits** with a blank skill pyramid. Reconnecting to the same running ship keeps your progress.
+- **Ship browser:** LAUNCH opens a list of the ships flying right now (players, names, level, phase) with Join, **Create a new ship** and Join the public ship. Invite links (`?room=` / `?ship=`) skip it.
+- **Every ship starts in the character lobby**, the public ship too.
+- **Restart vote:** Menu → Restart Game starts a vote (instant if you are alone). The others get a Yes / No banner. A majority of the humans aboard sends everyone back to the lobby for a fresh run. The vote fails on a No majority or after 30 s.
+- **Empty ships are removed:** when only bots are left, the ship freezes and is deleted after a 45 s grace period (`ROOM_GRACE_MS`), so the next start begins from scratch.
+- **No timers between missions:** the star map launches only when every human has voted, and the upgrade bay moves on only when every human is Ready (bots are always ready). One vote each; a tie goes to the human pilot's pick.
+- **Ports:** a third choice in every slot for the pilot (Needle Gun, Swarm Pod, Gyro Thrusters), engineer (Coolant Loop, EMP Projector, Flywheel Drive), shield (Regen Coil, Shield Pulse, Hardened Emitter) and repair (Regen Matrix, Scrap Collector, Reinforced Bulkheads). Gunners pick from the same 5 guns (Laser, Sniper, Rockets, Scatter, Flak) in every slot, repeats allowed. Port 3 guns can take **★ Double Barrel**, which fires twice as many rounds.
+- **Pilot:** new uncapped **Strafe Thrusters** upgrade (+8% strafe power per level). The ability bar shows "Z / X strafe · Thrusters Lv N".
+- **Engineer:** the engines spool slowly toward the set throttle. Throttle above 40% drains the reroute power pool, up to 3.2/s at 100%. The panel shows a 40% mark, the actual engine output, a label and a tooltip, plus a one-time voiced tip from Mort. Reroute drain is steeper (10 slots = 25.6/s).
+- **Radiation:** 1.5 hull/s (was 0.6). Zones get a shimmering, smoky look with rippling rings.
+- **Voices:** the six crew voices are about 10% faster (Szarkath unchanged). Finn's hull-50% and hull-critical calls have 4 variants each, the Mireth care package has 3.
+- Tests: `node test/v9-test.js http://localhost:8091`. Screenshots: `node test/shot-v9.js http://localhost:8091/ <dir>`.
+
 ## What is new in v8 (update number 7)
 `/health` reports `v:8`. Tests: `test/v8-test.js` (needs `DEV_TOOLS=1`), screenshots: `test/shot-v8.js` (needs Chrome).
 - **Final boss, the Drowned Throne:** now 2.1x bigger with 33 destroyable ports (lances, batteries, flak, missile racks, docks, shield projectors), a bigger shield and three phases.

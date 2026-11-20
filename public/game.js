@@ -1481,6 +1481,7 @@ $('lobby').addEventListener('click', e => {
 });
 function v8Dom(s) {
   const ph = s.ph, L = $('lobby'); rvUI(s); engTip(s);
+  { const pk = me.role >= 0 && s.crew[me.role] ? JSON.stringify(s.crew[me.role][7]) : ''; if (pk !== v8Dom.pk) { v8Dom.pk = pk; if (!$('upp').classList.contains('hide')) renderUp(); } }   // v9: refresh the port list as soon as the bought port shows up in the snapshot
   document.body.classList.toggle('pil', me.role === 0);
   $('feed').classList.toggle('hide', ph !== 'mission');
   if (ph === 'lobby') { L.classList.remove('hide'); lobbyRender(s); }
@@ -1516,7 +1517,8 @@ document.addEventListener('click', e => { const b = e.target.closest && e.target
 let engTipT = 0;
 function engTip(s) {   // one-time comm from Mort explaining the throttle lag + the >40% power drain
   if (s.ph !== 'mission' || me.role !== ENG) { engTipT = 0; return; }
-  engTipT++; if (engTipT < 45) return;
+  if (!$('card').classList.contains('hide')) return;   // wait until the role card is closed
+  engTipT++; if (engTipT < 30) return;
   try { if (localStorage.getItem('tss_thrtip')) return; localStorage.setItem('tss_thrtip', '1'); } catch (_) { }
   commShow('mort', ST.THR_TIP, 'ENGINEER TIP · THROTTLE', 'mort_thr'); feedAdd('Throttle above 40% drains reroute power', 'i');
 }
